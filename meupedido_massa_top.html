@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MeuPedido — Massa Top</title>
+<style>
+:root{--red:#c62828;--yellow:#ffd54f;--dark:#222;--bg:#f5f5f5;--card:#fff;--muted:#666;--line:#e4e4e4}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--dark)}
+header{background:var(--red);color:white;padding:18px 16px}header h1{margin:0;font-size:23px}header p{margin:5px 0 0;font-size:14px}
+nav{display:flex;gap:8px;padding:12px;background:#fff;position:sticky;top:0;border-bottom:1px solid var(--line);z-index:2;flex-wrap:wrap}
+button,.tab{border:0;border-radius:9px;padding:11px 14px;cursor:pointer;font-size:14px;font-weight:700}
+.tab{background:#eee;color:#222}.tab.active{background:var(--yellow)}button.primary{background:var(--red);color:#fff}button.secondary{background:#eee;color:#222}button.danger{background:#ffebee;color:#a40000}
+main{max-width:1000px;margin:0 auto;padding:16px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:16px}.stat,.panel,.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}.stat span{display:block;color:var(--muted);font-size:13px}.stat strong{font-size:24px;display:block;margin-top:5px}
+h2{font-size:20px;margin:4px 0 14px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.toolbar input,.toolbar select{flex:1;min-width:150px}
+input,select,textarea{width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font:inherit;background:white}label{display:block;font-size:13px;font-weight:700;margin:10px 0 5px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.item{margin-bottom:10px}.itemtop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.item h3{font-size:16px;margin:0 0 5px}.muted{color:var(--muted);font-size:13px}.price{font-weight:800;font-size:17px;white-space:nowrap}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.actions button{padding:8px 10px;font-size:12px}.status{display:inline-block;background:#fff3cd;border-radius:20px;padding:5px 9px;font-size:12px;font-weight:700}
+.formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.empty{padding:28px;text-align:center;color:var(--muted);background:white;border:1px dashed #ccc;border-radius:12px}
+#notice{padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:9px;font-size:13px;margin-bottom:14px}
+.hidden{display:none!important}.right{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.qty{display:flex;gap:8px;align-items:center}.qty input{width:90px}
+footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-size:12px}
+@media(max-width:520px){main{padding:10px}header h1{font-size:21px}.tab{flex:1;padding:10px 8px}}
+</style>
+</head>
+<body>
+<header><h1>🍕 MeuPedido</h1><p>Massa Top · Controle simples de produtos e pedidos</p></header>
+<nav>
+<button class="tab active" data-page="painel">Painel</button>
+<button class="tab" data-page="pedidos">Pedidos</button>
+<button class="tab" data-page="produtos">Produtos</button>
+<button class="tab" data-page="backup">Backup</button>
+</nav>
+<main>
+<div id="notice"><b>Importante:</b> esta versão gratuita salva os dados neste navegador e neste computador. Não sincroniza automaticamente com outros aparelhos. Use “Backup” para guardar uma cópia.</div>
+<section id="page-painel">
+<h2>Resumo de hoje</h2><div class="stats" id="stats"></div>
+<div class="panel"><h3>Pedidos recentes</h3><div id="recent"></div></div>
+</section>
+<section id="page-produtos" class="hidden">
+<div class="toolbar"><input id="productSearch" placeholder="Buscar produto..."><button class="primary" id="newProduct">+ Novo produto</button></div>
+<div id="productForm" class="panel hidden">
+<h2 id="productFormTitle">Novo produto</h2>
+<div class="formrow"><div><label for="pname">Nome</label><input id="pname" placeholder="Ex.: Pizza Calabresa"></div><div><label for="pcat">Categoria</label><input id="pcat" placeholder="Ex.: Pizza"></div><div><label for="pprice">Preço (R$)</label><input id="pprice" type="number" min="0" step=".01" placeholder="26,00"></div><div><label for="pavailable">Disponível?</label><select id="pavailable"><option value="sim">Sim</option><option value="nao">Não</option></select></div></div>
+<div class="actions"><button class="primary" id="saveProduct">Salvar produto</button><button class="secondary" id="cancelProduct">Cancelar</button></div>
+</div><div id="productList"></div>
+</section>
+<section id="page-pedidos" class="hidden">
+<div class="toolbar"><select id="statusFilter"><option value="">Todos os status</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
+<div id="orderForm" class="panel hidden">
+<h2>Novo pedido</h2>
+<div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div><div><label for="payment">Forma de pagamento</label><select id="payment"><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Na entrega</option></select></div></div>
+<label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
+<label for="notes">Observações</label><textarea id="notes" rows="2" placeholder="Ex.: sem cebola, troco para..."></textarea>
+<p><b>Total: <span id="orderTotal">R$ 0,00</span></b></p>
+<div class="actions"><button class="primary" id="saveOrder">Salvar pedido</button><button class="secondary" id="cancelOrder">Cancelar</button></div>
+</div><div id="orderList"></div>
+</section>
+<section id="page-backup" class="hidden">
+<h2>Backup dos dados</h2><div class="panel"><p>Baixe uma cópia dos produtos e pedidos para guardar com segurança. Você também pode restaurar um backup feito neste aplicativo.</p>
+<div class="actions"><button class="primary" id="exportData">Baixar backup</button><label class="secondary" style="display:inline-block;cursor:pointer">Restaurar backup <input id="importFile" type="file" accept=".json,application/json" style="display:none"></label></div>
+<p class="muted">Não compartilhe o arquivo de backup publicamente: ele pode conter nomes, telefones e endereços de clientes.</p></div>
+</section>
+</main><footer>MeuPedido — versão local gratuita. Guarde backups regularmente.</footer>
+<script>
+const KEY='meupedido_massatop_v1';
+const brl=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+let db=load(), editProduct=null, itemCounter=0;
+function load(){try{return JSON.parse(localStorage.getItem(KEY))||{products:[],orders:[]}}catch(e){return {products:[],orders:[]}}}
+function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
+function renderAll(){renderStats();renderProducts();renderOrders();renderRecent()}
+function renderStats(){let today=new Date().toDateString(),orders=db.orders.filter(o=>new Date(o.created).toDateString()===today&&o.status!=='Cancelado'),sales=orders.filter(o=>o.status==='Entregue').reduce((s,o)=>s+o.total,0);document.getElementById('stats').innerHTML=`<div class="stat"><span>Produtos cadastrados</span><strong>${db.products.length}</strong></div><div class="stat"><span>Pedidos de hoje</span><strong>${orders.length}</strong></div><div class="stat"><span>Vendas entregues hoje</span><strong>${brl(sales)}</strong></div><div class="stat"><span>Pedidos em aberto</span><strong>${db.orders.filter(o=>!['Entregue','Cancelado'].includes(o.status)).length}</strong></div>`}
+function renderProducts(){let q=(document.getElementById('productSearch')?.value||'').toLowerCase(),list=db.products.filter(p=>(p.name+' '+p.category).toLowerCase().includes(q));document.getElementById('productList').innerHTML=list.length?list.map(p=>`<div class="item"><div class="itemtop"><div><h3>${esc(p.name)}</h3><div class="muted">${esc(p.category)} · ${p.available?'Disponível':'Indisponível'}</div></div><div class="price">${brl(p.price)}</div></div><div class="actions"><button class="secondary" onclick="editP('${p.id}')">Editar</button><button class="secondary" onclick="toggleP('${p.id}')">${p.available?'Marcar indisponível':'Marcar disponível'}</button><button class="danger" onclick="deleteP('${p.id}')">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum produto cadastrado. Clique em “Novo produto”.</div>'}
+document.getElementById('productSearch').oninput=renderProducts;
+document.getElementById('newProduct').onclick=()=>{editProduct=null;document.getElementById('productFormTitle').textContent='Novo produto';['pname','pcat','pprice'].forEach(id=>document.getElementById(id).value='');document.getElementById('pavailable').value='sim';document.getElementById('productForm').classList.remove('hidden')};
+document.getElementById('cancelProduct').onclick=()=>document.getElementById('productForm').classList.add('hidden');
+document.getElementById('saveProduct').onclick=()=>{let name=document.getElementById('pname').value.trim(),category=document.getElementById('pcat').value.trim(),price=Number(document.getElementById('pprice').value);if(!name||!category||!Number.isFinite(price)||price<0){alert('Preencha nome, categoria e preço válido.');return}let p={id:editProduct||uid(),name,category,price,available:document.getElementById('pavailable').value==='sim'};let i=db.products.findIndex(x=>x.id===p.id);if(i>=0)db.products[i]=p;else db.products.push(p);document.getElementById('productForm').classList.add('hidden');save()};
+window.editP=id=>{let p=db.products.find(x=>x.id===id);if(!p)return;editProduct=id;document.getElementById('productFormTitle').textContent='Editar produto';document.getElementById('pname').value=p.name;document.getElementById('pcat').value=p.category;document.getElementById('pprice').value=p.price;document.getElementById('pavailable').value=p.available?'sim':'nao';document.getElementById('productForm').classList.remove('hidden');window.scrollTo(0,0)};
+window.toggleP=id=>{let p=db.products.find(x=>x.id===id);if(p){p.available=!p.available;save()}};
+window.deleteP=id=>{if(confirm('Excluir este produto? Pedidos já registrados serão mantidos.')){db.products=db.products.filter(p=>p.id!==id);save()}};
+function addOrderRow(productId='',qty=1){let id=++itemCounter,opts=db.products.filter(p=>p.available).map(p=>`<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`).join('');let row=document.createElement('div');row.className='formrow orderrow item';row.dataset.row=id;row.innerHTML=`<div><label>Produto</label><select class="oi-product"><option value="">Escolher produto</option>${opts}</select></div><div><label>Quantidade</label><input class="oi-qty" type="number" min="1" step="1" value="${qty}"></div><div><label>Subtotal</label><input class="oi-sub" value="${brl(0)}" readonly></div><div class="right" style="align-items:end"><button type="button" class="danger oi-remove">Remover item</button></div>`;document.getElementById('orderItems').appendChild(row);row.querySelectorAll('select,input').forEach(e=>e.addEventListener('input',calcTotal));row.querySelector('.oi-remove').onclick=()=>{row.remove();calcTotal()};calcTotal()}
+function calcTotal(){let total=0;document.querySelectorAll('.orderrow').forEach(r=>{let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value),q=Math.max(0,Number(r.querySelector('.oi-qty').value)||0),sub=p?p.price*q:0;r.querySelector('.oi-sub').value=brl(sub);total+=sub});document.getElementById('orderTotal').textContent=brl(total)}
+document.getElementById('newOrder').onclick=()=>{document.getElementById('cname').value='';document.getElementById('cphone').value='';document.getElementById('caddress').value='';document.getElementById('payment').value='Pix';document.getElementById('notes').value='';document.getElementById('orderItems').innerHTML='';itemCounter=0;addOrderRow();document.getElementById('orderForm').classList.remove('hidden');window.scrollTo(0,0)};
+document.getElementById('addItem').onclick=()=>addOrderRow();document.getElementById('cancelOrder').onclick=()=>document.getElementById('orderForm').classList.add('hidden');
+document.getElementById('saveOrder').onclick=()=>{let rows=[...document.querySelectorAll('.orderrow')],items=rows.map(r=>{let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value),qty=Math.floor(Number(r.querySelector('.oi-qty').value));return p&&qty>0?{productId:p.id,name:p.name,price:p.price,qty,subtotal:p.price*qty}:null}).filter(Boolean);if(!items.length){alert('Escolha pelo menos um produto e uma quantidade.');return}let total=items.reduce((s,i)=>s+i.subtotal,0);let order={id:uid(),number:db.orders.length+1,customer:document.getElementById('cname').value.trim()||'Cliente',phone:document.getElementById('cphone').value.trim(),address:document.getElementById('caddress').value.trim(),payment:document.getElementById('payment').value,notes:document.getElementById('notes').value.trim(),items,total,status:'Recebido',created:new Date().toISOString()};db.orders.unshift(order);document.getElementById('orderForm').classList.add('hidden');save();setPage('pedidos')};
+document.getElementById('statusFilter').onchange=renderOrders;document.getElementById('orderSearch').oninput=renderOrders;
+function renderOrders(){let status=document.getElementById('statusFilter')?.value||'',q=(document.getElementById('orderSearch')?.value||'').toLowerCase(),orders=db.orders.filter(o=>(!status||o.status===status)&&(o.customer+' '+o.phone+' '+o.number).toLowerCase().includes(q));document.getElementById('orderList').innerHTML=orders.length?orders.map(o=>`<div class="item"><div class="itemtop"><div><h3>Pedido #${o.number} · ${esc(o.customer)}</h3><div class="muted">${new Date(o.created).toLocaleString('pt-BR')} · ${esc(o.payment)}</div></div><div class="price">${brl(o.total)}</div></div><p>${o.items.map(i=>`${i.qty}× ${esc(i.name)}`).join(' · ')}</p>${o.address?`<p class="muted">Endereço: ${esc(o.address)}</p>`:''}${o.phone?`<p class="muted">Telefone: ${esc(o.phone)}</p>`:''}${o.notes?`<p class="muted">Obs.: ${esc(o.notes)}</p>`:''}<div class="formrow"><div><label>Status</label><select onchange="changeStatus('${o.id}',this.value)">${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div><label>Itens e quantidades</label><div class="muted">${o.items.map(i=>`${i.qty} × ${brl(i.price)} = ${brl(i.subtotal)}`).join('<br>')}</div></div></div><div class="actions"><button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Ainda não há pedidos com esses filtros.</div>'}
+window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
+window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
+function renderRecent(){let list=db.orders.slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
+document.getElementById('exportData').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-meupedido-massatop.json';a.click();URL.revokeObjectURL(a.href)};
+document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
+renderAll();
+</script></body></html>
