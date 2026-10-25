@@ -91,6 +91,15 @@ const KEY='meupedido_massatop_v1';
 const brl=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 let db=load(), editProduct=null, itemCounter=0;
+  db.products ||= [];
+db.orders ||= [];
+db.borderPrices ||= {
+  Catupiry: 0,
+  Chocolate: 0,
+  Cheddar: 0,
+  Mussarela: 0,
+  Requeijão: 0
+};
   const borderFields = {
   Catupiry: 'borderCatupiry',
   Chocolate: 'borderChocolate',
@@ -104,7 +113,7 @@ function loadBorderPrices() {
     document.getElementById(id).value = db.borderPrices[sabor] ?? 0;
   });
 }
-
+loadBorderPrices();
 document.getElementById('saveBorderPrices').onclick = () => {
   Object.entries(borderFields).forEach(([sabor, id]) => {
     db.borderPrices[sabor] = Math.max(
@@ -117,7 +126,7 @@ document.getElementById('saveBorderPrices').onclick = () => {
   alert('Preços das bordas salvos!');
 };
 
-loadBorderPrices();
+
 db.products ||= [];
 db.orders ||= [];
 db.borderPrices ||= {
