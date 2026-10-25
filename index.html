@@ -108,7 +108,6 @@ db.borderPrices ||= {
   Requeijão: 'borderRequeijao'
 };
 
-function loadBorderPrices() {
   Object.entries(borderFields).forEach(([sabor, id]) => {
     document.getElementById(id).value = db.borderPrices[sabor] ?? 0;
   });
