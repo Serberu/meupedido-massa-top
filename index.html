@@ -135,6 +135,32 @@ db.borderPrices ||= {
   "Mussarela": 0,
   "Requeijão": 0
 };
+  const borderFields = {
+  Catupiry: 'borderCatupiry',
+  Chocolate: 'borderChocolate',
+  Cheddar: 'borderCheddar',
+  Mussarela: 'borderMussarela',
+  Requeijão: 'borderRequeijao'
+};
+
+function loadBorderPrices() {
+  Object.entries(borderFields).forEach(([sabor, id]) => {
+    const campo = document.getElementById(id);
+    if (campo) campo.value = db.borderPrices[sabor] ?? 0;
+  });
+}
+
+document.getElementById('saveBorderPrices').onclick = () => {
+  Object.entries(borderFields).forEach(([sabor, id]) => {
+    db.borderPrices[sabor] = Math.max(
+      0,
+      Number(document.getElementById(id).value) || 0
+    );
+  });
+
+  save();
+  alert('Preços das bordas salvos!');
+};
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{products:[],orders:[]}}catch(e){return {products:[],orders:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -194,4 +220,5 @@ function renderRecent(){let list=db.orders.slice(0,5);document.getElementById('r
 document.getElementById('exportData').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-meupedido-massatop.json';a.click();URL.revokeObjectURL(a.href)};
 document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
 renderAll();
+loadBorderPrices();
 </script></body></html>
