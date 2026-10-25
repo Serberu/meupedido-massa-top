@@ -116,6 +116,8 @@ function calcTotal(){
   document.getElementById('orderTotal').textContent = brl(total);
 }
 
+document.getElementById('deliveryFee').addEventListener('input', calcTotal);
+
 document.getElementById('newOrder').onclick=()=>{document.getElementById('cname').value='';document.getElementById('cphone').value='';document.getElementById('caddress').value='';document.getElementById('payment').value='Pix';document.getElementById('notes').value='';document.getElementById('orderItems').innerHTML='';itemCounter=0;addOrderRow();document.getElementById('orderForm').classList.remove('hidden');window.scrollTo(0,0)};
 document.getElementById('addItem').onclick=()=>addOrderRow();document.getElementById('cancelOrder').onclick=()=>document.getElementById('orderForm').classList.add('hidden');
 document.getElementById('saveOrder').onclick=()=>{let rows=[...document.querySelectorAll('.orderrow')],items=rows.map(r=>{let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value),qty=Math.floor(Number(r.querySelector('.oi-qty').value));return p&&qty>0?{productId:p.id,name:p.name,price:p.price,qty,subtotal:p.price*qty}:null}).filter(Boolean);if(!items.length){alert('Escolha pelo menos um produto e uma quantidade.');return}let total=items.reduce((s,i)=>s+i.subtotal,0);let order={id:uid(),number:db.orders.length+1,customer:document.getElementById('cname').value.trim()||'Cliente',phone:document.getElementById('cphone').value.trim(),address:document.getElementById('caddress').value.trim(),payment:document.getElementById('payment').value,notes:document.getElementById('notes').value.trim(),items,total,status:'Recebido',created:new Date().toISOString()};db.orders.unshift(order);document.getElementById('orderForm').classList.add('hidden');save();setPage('pedidos')};
