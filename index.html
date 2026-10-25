@@ -41,6 +41,26 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <div class="formrow"><div><label for="pname">Nome</label><input id="pname" placeholder="Ex.: Pizza Calabresa"></div><div><label for="pcat">Categoria</label><input id="pcat" placeholder="Ex.: Pizza"></div><div><label for="pprice">Preço (R$)</label><input id="pprice" type="number" min="0" step=".01" placeholder="26,00"></div><div><label for="pavailable">Disponível?</label><select id="pavailable"><option value="sim">Sim</option><option value="nao">Não</option></select></div></div>
 <div class="actions"><button class="primary" id="saveProduct">Salvar produto</button><button class="secondary" id="cancelProduct">Cancelar</button></div>
 </div><div id="productList"></div>
+  <div class="panel">
+  <h3>Preços das bordas recheadas</h3>
+
+  <label for="borderCatupiry">Catupiry (R$)</label>
+  <input id="borderCatupiry" type="number" min="0" step="0.01" value="0">
+
+  <label for="borderChocolate">Chocolate (R$)</label>
+  <input id="borderChocolate" type="number" min="0" step="0.01" value="0">
+
+  <label for="borderCheddar">Cheddar (R$)</label>
+  <input id="borderCheddar" type="number" min="0" step="0.01" value="0">
+
+  <label for="borderMussarela">Mussarela (R$)</label>
+  <input id="borderMussarela" type="number" min="0" step="0.01" value="0">
+
+  <label for="borderRequeijao">Requeijão (R$)</label>
+  <input id="borderRequeijao" type="number" min="0" step="0.01" value="0">
+
+  <button class="primary" id="saveBorderPrices">Salvar preços das bordas</button>
+</div>
 </section>
 <section id="page-pedidos" class="hidden">
 <div class="toolbar"><select id="statusFilter"><option value="">Todos os status</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
@@ -71,6 +91,33 @@ const KEY='meupedido_massatop_v1';
 const brl=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 let db=load(), editProduct=null, itemCounter=0;
+  const borderFields = {
+  Catupiry: 'borderCatupiry',
+  Chocolate: 'borderChocolate',
+  Cheddar: 'borderCheddar',
+  Mussarela: 'borderMussarela',
+  Requeijão: 'borderRequeijao'
+};
+
+function loadBorderPrices() {
+  Object.entries(borderFields).forEach(([sabor, id]) => {
+    document.getElementById(id).value = db.borderPrices[sabor] ?? 0;
+  });
+}
+
+document.getElementById('saveBorderPrices').onclick = () => {
+  Object.entries(borderFields).forEach(([sabor, id]) => {
+    db.borderPrices[sabor] = Math.max(
+      0,
+      Number(document.getElementById(id).value) || 0
+    );
+  });
+
+  save();
+  alert('Preços das bordas salvos!');
+};
+
+loadBorderPrices();
 db.products ||= [];
 db.orders ||= [];
 db.borderPrices ||= {
