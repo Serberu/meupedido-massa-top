@@ -113,7 +113,7 @@ function loadBorderPrices() {
     document.getElementById(id).value = db.borderPrices[sabor] ?? 0;
   });
 }
-loadBorderPrices();
+
 document.getElementById('saveBorderPrices').onclick = () => {
   Object.entries(borderFields).forEach(([sabor, id]) => {
     db.borderPrices[sabor] = Math.max(
@@ -136,6 +136,7 @@ db.borderPrices ||= {
   "Mussarela": 0,
   "Requeijão": 0
 };
+loadBorderPrices();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{products:[],orders:[]}}catch(e){return {products:[],orders:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
