@@ -187,6 +187,7 @@ function addOrderRow(productId='',qty=1){
   calcTotal();
 }
 
+
 function calcTotal(){
   let total = 0;
 
@@ -200,7 +201,13 @@ function calcTotal(){
       Number(r.querySelector('.oi-qty').value) || 0
     );
 
-    let sub = p ? p.price * q : 0;
+    let valorBorda = Math.max(
+      0,
+      Number(r.querySelector('.oi-border')?.value) || 0
+    );
+
+    let sub = p ? (p.price + valorBorda) * q : 0;
+
     r.querySelector('.oi-sub').value = brl(sub);
     total += sub;
   });
@@ -214,6 +221,7 @@ function calcTotal(){
 
   document.getElementById('orderTotal').textContent = brl(total);
 }
+
 
 document.getElementById('deliveryFee').addEventListener('input', calcTotal);
 
