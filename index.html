@@ -48,7 +48,16 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <h2>Novo pedido</h2>
 <div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div><div><label for="payment">Forma de pagamento</label><select id="payment"><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Na entrega</option></select></div></div>
 <label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
+<label for="orderBorder">Borda da pizza</label>
+<select id="orderBorder">
+  <option value="0">Sem borda adicional — R$ 0,00</option>
+  <option value="0">Catupiry — grátis</option>
+  <option value="0">Cheddar — grátis</option>
+  <option value="chocolate">Chocolate — adicional</option>
+</select>
 
+<label for="chocolateBorderPrice">Preço da borda de chocolate (R$)</label>
+<input id="chocolateBorderPrice" type="number" min="0" step="0.50" value="5.00">
 <label for="deliveryFee">Taxa de entrega (R$)</label>
 <input id="deliveryFee" type="number" min="0" step="0.01" value="0">
 
@@ -87,10 +96,100 @@ window.editP=id=>{let p=db.products.find(x=>x.id===id);if(!p)return;editProduct=
 window.toggleP=id=>{let p=db.products.find(x=>x.id===id);if(p){p.available=!p.available;save()}};
 window.deleteP=id=>{if(confirm('Excluir este produto? Pedidos já registrados serão mantidos.')){db.products=db.products.filter(p=>p.id!==id);save()}};
 function addOrderRow(productId='',qty=1){let id=++itemCounter,opts=db.products.filter(p=>p.available).map(p=>`<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`).join('');let row=document.createElement('div');row.className='formrow orderrow item';row.dataset.row=id;row.innerHTML=`<div><label>Produto</label><select class="oi-product"><option value="">Escolher produto</option>${opts}</select></div><div><label>Quantidade</label><input class="oi-qty" type="number" min="1" step="1" value="${qty}"></div><div><label>Subtotal</label><input class="oi-sub" value="${brl(0)}" readonly></div><div class="right" style="align-items:end"><button type="button" class="danger oi-remove">Remover item</button></div>`;document.getElementById('orderItems').appendChild(row);row.querySelectorAll('select,input').forEach(e=>e.addEventListener('input',calcTotal));row.querySelector('.oi-remove').onclick=()=>{row.remove();calcTotal()};calcTotal()}
-function calcTotal(){let total=0;document.querySelectorAll('.orderrow').forEach(r=>{let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value),q=Math.max(0,Number(r.querySelector('.oi-qty').value)||0),sub=p?p.price*q:0;r.querySelector('.oi-sub').value=brl(sub);total+=sub});document.getElementById('orderTotal').textContent=brl(total)}
-document.getElementById('newOrder').onclick=()=>{document.getElementById('cname').value='';document.getElementById('cphone').value='';document.getElementById('caddress').value='';document.getElementById('payment').value='Pix';document.getElementById('notes').value='';document.getElementById('orderItems').innerHTML='';itemCounter=0;addOrderRow();document.getElementById('orderForm').classList.remove('hidden');window.scrollTo(0,0)};
-document.getElementById('addItem').onclick=()=>addOrderRow();document.getElementById('cancelOrder').onclick=()=>document.getElementById('orderForm').classList.add('hidden');
-document.getElementById('saveOrder').onclick=()=>{let rows=[...document.querySelectorAll('.orderrow')],items=rows.map(r=>{let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value),qty=Math.floor(Number(r.querySelector('.oi-qty').value));return p&&qty>0?{productId:p.id,name:p.name,price:p.price,qty,subtotal:p.price*qty}:null}).filter(Boolean);if(!items.length){alert('Escolha pelo menos um produto e uma quantidade.');return}let total=items.reduce((s,i)=>s+i.subtotal,0);let order={id:uid(),number:db.orders.length+1,customer:document.getElementById('cname').value.trim()||'Cliente',phone:document.getElementById('cphone').value.trim(),address:document.getElementById('caddress').value.trim(),payment:document.getElementById('payment').value,notes:document.getElementById('notes').value.trim(),items,total,status:'Recebido',created:new Date().toISOString()};db.orders.unshift(order);document.getElementById('orderForm').classList.add('hidden');save();setPage('pedidos')};
+function calcTotal(){
+  let total=0;
+
+  document.querySelectorAll('.orderrow').forEach(r=>{
+    let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value);
+    let q=Math.max(0,Number(r.querySelector('.oi-qty').value)||0);
+    let sub=p?p.price*q:0;
+
+    r.querySelector('.oi-sub').value=brl(sub);
+    total+=sub;
+  });
+
+  const border=document.getElementById('orderBorder');
+  const chocolatePrice=document.getElementById('chocolateBorderPrice');
+  const delivery=document.getElementById('deliveryFee');
+
+  if(border && border.value==='chocolate' && chocolatePrice){
+    total+=Math.max(0,Number(chocolatePrice.value)||0);
+  }
+
+  if(delivery){
+    total+=Math.max(0,Number(delivery.value)||0);
+  }
+
+  document.getElementById('orderTotal').textContent=brl(total);
+}
+
+document.getElementById('newOrder').onclick=()=>{
+  document.getElementById('cname').value='';
+  document.getElementById('cphone').value='';
+  document.getElementById('caddress').value='';
+  document.getElementById('payment').value='Pix';
+  document.getElementById('notes').value='';
+  document.getElementById('orderBorder').value='0';
+  document.getElementById('chocolateBorderPrice').value='5.00';
+  document.getElementById('deliveryFee').value='0';
+  document.getElementById('courierPay').value='0';
+  document.getElementById('orderItems').innerHTML='';
+  itemCounter=0;
+  addOrderRow();
+  document.getElementById('orderForm').classList.remove('hidden');
+  window.scrollTo(0,0);
+};
+
+document.getElementById('addItem').onclick=()=>addOrderRow();document.getElementById('orderBorder').addEventListener('change',calcTotal);
+document.getElementById('chocolateBorderPrice').addEventListener('input',calcTotal);
+document.getElementById('deliveryFee').addEventListener('input',calcTotal);document.getElementById('cancelOrder').onclick=()=>document.getElementById('orderForm').classList.add('hidden');
+
+document.getElementById('saveOrder').onclick=()=>{
+  let rows=[...document.querySelectorAll('.orderrow')];
+  let items=rows.map(r=>{
+    let p=db.products.find(p=>p.id===r.querySelector('.oi-product').value);
+    let qty=Math.floor(Number(r.querySelector('.oi-qty').value));
+    return p&&qty>0?{productId:p.id,name:p.name,price:p.price,qty,subtotal:p.price*qty}:null;
+  }).filter(Boolean);
+
+  if(!items.length){
+    alert('Escolha pelo menos um produto e uma quantidade.');
+    return;
+  }
+
+  let border=document.getElementById('orderBorder');
+  let chocolatePrice=document.getElementById('chocolateBorderPrice');
+  let deliveryFee=Math.max(0,Number(document.getElementById('deliveryFee').value)||0);
+  let courierPay=Math.max(0,Number(document.getElementById('courierPay').value)||0);
+  let borderPrice=border&&border.value==='chocolate'&&chocolatePrice
+    ?Math.max(0,Number(chocolatePrice.value)||0):0;
+
+  let total=items.reduce((s,i)=>s+i.subtotal,0)+borderPrice+deliveryFee;
+
+  let order={
+    id:uid(),
+    number:db.orders.length+1,
+    customer:document.getElementById('cname').value.trim()||'Cliente',
+    phone:document.getElementById('cphone').value.trim(),
+    address:document.getElementById('caddress').value.trim(),
+    payment:document.getElementById('payment').value,
+    notes:document.getElementById('notes').value.trim(),
+    items,
+    border:border?border.options[border.selectedIndex].text:'Sem borda adicional',
+    borderPrice,
+    deliveryFee,
+    courierPay,
+    total,
+    status:'Recebido',
+    created:new Date().toISOString()
+  };
+
+  db.orders.unshift(order);
+  document.getElementById('orderForm').classList.add('hidden');
+  save();
+  setPage('pedidos');
+};
+
 document.getElementById('statusFilter').onchange=renderOrders;document.getElementById('orderSearch').oninput=renderOrders;
 function renderOrders(){let status=document.getElementById('statusFilter')?.value||'',q=(document.getElementById('orderSearch')?.value||'').toLowerCase(),orders=db.orders.filter(o=>(!status||o.status===status)&&(o.customer+' '+o.phone+' '+o.number).toLowerCase().includes(q));document.getElementById('orderList').innerHTML=orders.length?orders.map(o=>`<div class="item"><div class="itemtop"><div><h3>Pedido #${o.number} · ${esc(o.customer)}</h3><div class="muted">${new Date(o.created).toLocaleString('pt-BR')} · ${esc(o.payment)}</div></div><div class="price">${brl(o.total)}</div></div><p>${o.items.map(i=>`${i.qty}× ${esc(i.name)}`).join(' · ')}</p>${o.address?`<p class="muted">Endereço: ${esc(o.address)}</p>`:''}${o.phone?`<p class="muted">Telefone: ${esc(o.phone)}</p>`:''}${o.notes?`<p class="muted">Obs.: ${esc(o.notes)}</p>`:''}<div class="formrow"><div><label>Status</label><select onchange="changeStatus('${o.id}',this.value)">${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div><label>Itens e quantidades</label><div class="muted">${o.items.map(i=>`${i.qty} × ${brl(i.price)} = ${brl(i.subtotal)}`).join('<br>')}</div></div></div><div class="actions"><button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Ainda não há pedidos com esses filtros.</div>'}
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
