@@ -70,8 +70,7 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
 
 <label for="deliveryFee">Taxa de entrega (R$)</label>
-<input id="deliveryFee" type="number" min="0" step="0.01" value="0">
-
+<input id="deliveryFee" type="number" min="0" step="0.01" placeholder="Digite a taxa">
 <label for="courierPay">Valor do entregador (R$)</label>
 <input id="courierPay" type="number" min="0" step="0.01" value="0">
 
@@ -172,7 +171,7 @@ function addOrderRow(productId='',qty=1){
     </div>
     <div>
       <label>Valor da borda (R$)</label>
-      <input class="oi-border" type="number" min="0" step="0.01" value="0">
+<input class="oi-border" type="number" min="0" step="0.01" placeholder="Valor da borda">
     </div>
     <div>
       <label>Subtotal</label>
