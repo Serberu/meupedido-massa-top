@@ -71,6 +71,14 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 
 <label for="deliveryFee">Taxa de entrega (R$)</label>
 <input id="deliveryFee" type="number" min="0" step="0.01" placeholder="Digite a taxa">
+<script>
+document.getElementById('deliveryFee').addEventListener('input', function () {
+  const valorEntregador = document.getElementById('courierPay');
+  if (valorEntregador) {
+    valorEntregador.value = this.value;
+  }
+});
+</script>
 <label for="courierName">Nome do entregador</label>
 <input id="courierName" type="text" placeholder="Digite o nome">
 
