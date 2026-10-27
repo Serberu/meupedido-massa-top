@@ -104,7 +104,7 @@ document.getElementById('deliveryFee').addEventListener('input', function () {
 const KEY='meupedido_massatop_v1';
 const brl=n=>Number(n||0).toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
 const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,7);
-let db=load(), editProduct=null, itemCounter=0;
+let db=load(), editProduct=null, itemCounter=0, editingOrderId=null;
   db.products ||= [];
 db.orders ||= [];
 db.borderPrices ||= {
@@ -241,9 +241,9 @@ window.editP=id=>{let p=db.products.find(x=>x.id===id);if(!p)return;editProduct=
 window.toggleP=id=>{let p=db.products.find(x=>x.id===id);if(p){p.available=!p.available;save()}};
 window.deleteP=id=>{if(confirm('Excluir este produto? Pedidos já registrados serão mantidos.')){db.products=db.products.filter(p=>p.id!==id);save()}};
 
-function addOrderRow(productId='',qty=1){
+function addOrderRow(productId='',qty=1,borderValue=0){
   let id=++itemCounter;
-  let opts=db.products.filter(p=>p.available).map(p=>`<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`).join('');
+  let opts=db.products.filter(p=>p.available || p.id===productId).map(p=>`<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`).join('');
   let row=document.createElement('div');
   row.className='formrow orderrow item';
   row.dataset.row=id;
@@ -260,7 +260,7 @@ function addOrderRow(productId='',qty=1){
     </div>
     <div>
       <label>Valor da borda (R$)</label>
-<input class="oi-border" type="number" min="0" step="0.01" placeholder="Valor da borda">
+<input class="oi-border" type="number" min="0" step="0.01" value="${Number(borderValue)||0}" placeholder="Valor da borda">
     </div>
     <div>
       <label>Subtotal</label>
@@ -313,40 +313,41 @@ function calcTotal(){
 
 document.getElementById('deliveryFee').addEventListener('input', calcTotal);
 
-document.getElementById('newOrder').onclick=()=>{document.getElementById('cname').value='';document.getElementById('cphone').value='';document.getElementById('caddress').value='';document.getElementById('payment').value='Pix';document.getElementById('notes').value='';document.getElementById('orderItems').innerHTML='';itemCounter=0;addOrderRow();document.getElementById('orderForm').classList.remove('hidden');window.scrollTo(0,0)};
-document.getElementById('addItem').onclick=()=>addOrderRow();document.getElementById('cancelOrder').onclick=()=>document.getElementById('orderForm').classList.add('hidden');
+document.getElementById('newOrder').onclick=()=>{
+  editingOrderId=null;
+  document.getElementById('orderForm').querySelector('h2').textContent='Novo pedido';
+  document.getElementById('saveOrder').textContent='Salvar pedido';
+  document.getElementById('cname').value='';
+  document.getElementById('cphone').value='';
+  document.getElementById('caddress').value='';
+  document.getElementById('payment').value='Pix';
+  document.getElementById('notes').value='';
+  document.getElementById('deliveryFee').value='';
+  document.getElementById('courierName').value='';
+  document.getElementById('courierPay').value='';
+  document.getElementById('orderItems').innerHTML='';
+  itemCounter=0;
+  addOrderRow();
+  document.getElementById('orderForm').classList.remove('hidden');
+  window.scrollTo(0,0);
+};
+document.getElementById('addItem').onclick=()=>addOrderRow();
+document.getElementById('cancelOrder').onclick=()=>{
+  editingOrderId=null;
+  document.getElementById('orderForm').classList.add('hidden');
+};
 
 
 document.getElementById('saveOrder').onclick = () => {
   const rows = [...document.querySelectorAll('.orderrow')];
-
   const items = rows.map(r => {
-    const p = db.products.find(
-      p => p.id === r.querySelector('.oi-product').value
-    );
-
-    const qty = Math.floor(
-      Number(r.querySelector('.oi-qty').value) || 0
-    );
-
-    const borderValue = Math.max(
-      0,
-      Number(r.querySelector('.oi-border')?.value) || 0
-    );
-
+    const p = db.products.find(p => p.id === r.querySelector('.oi-product').value);
+    const qty = Math.floor(Number(r.querySelector('.oi-qty').value) || 0);
+    const borderValue = Math.max(0, Number(r.querySelector('.oi-border')?.value) || 0);
     if (!p || qty <= 0) return null;
-
     const unitPrice = Number(p.price) || 0;
     const subtotal = (unitPrice + borderValue) * qty;
-
-    return {
-      productId: p.id,
-      name: p.name,
-      price: unitPrice,
-      qty,
-      borderValue,
-      subtotal
-    };
+    return { productId:p.id, name:p.name, price:unitPrice, qty, borderValue, subtotal };
   }).filter(Boolean);
 
   if (!items.length) {
@@ -354,37 +355,77 @@ document.getElementById('saveOrder').onclick = () => {
     return;
   }
 
-  const deliveryFee = Math.max(
-    0,
-    Number(document.getElementById('deliveryFee').value) || 0
-  );
-
+  const deliveryFee = Math.max(0, Number(document.getElementById('deliveryFee').value) || 0);
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const total = subtotal + deliveryFee;
+  const existing = editingOrderId ? db.orders.find(o => o.id === editingOrderId) : null;
 
   const order = {
-    id: uid(),
-    number: Math.max(0, ...db.orders.map(o => Number(o.number) || 0)) + 1,
+    ...(existing || {}),
+    id: existing ? existing.id : uid(),
+    number: existing ? existing.number : Math.max(0, ...db.orders.map(o => Number(o.number) || 0)) + 1,
     customer: document.getElementById('cname').value.trim() || 'Cliente',
     phone: document.getElementById('cphone').value.trim(),
     address: document.getElementById('caddress').value.trim(),
-   payment: document.getElementById('payment').value,
-notes: document.getElementById('notes').value.trim(),
-courierName: document.getElementById('courierName')?.value.trim() || '',
-courierPay: Math.max(0, Number(document.getElementById('courierPay')?.value) || 0),
-items,
-    subtotal,
-    deliveryFee,
-    total,
-    status: 'Recebido',
-    created: new Date().toISOString()
+    payment: document.getElementById('payment').value,
+    notes: document.getElementById('notes').value.trim(),
+    courierName: document.getElementById('courierName').value.trim(),
+    courierPay: Math.max(0, Number(document.getElementById('courierPay').value) || 0),
+    items, subtotal, deliveryFee, total,
+    status: existing ? existing.status : 'Recebido',
+    created: existing ? existing.created : new Date().toISOString()
   };
 
-  db.orders.unshift(order);
+  if (existing) {
+    const index = db.orders.findIndex(o => o.id === existing.id);
+    db.orders[index] = order;
+  } else {
+    db.orders.unshift(order);
+  }
+
+  editingOrderId = null;
   document.getElementById('orderForm').classList.add('hidden');
+  document.getElementById('orderForm').querySelector('h2').textContent = 'Novo pedido';
+  document.getElementById('saveOrder').textContent = 'Salvar pedido';
   save();
   setPage('pedidos');
 };
+
+function editOrder(id) {
+  const o = db.orders.find(order => order.id === id);
+  if (!o) {
+    alert('Pedido não encontrado.');
+    return;
+  }
+  if (['Entregue', 'Cancelado'].includes(o.status)) {
+    alert('Pedidos entregues ou cancelados não podem ser editados.');
+    return;
+  }
+
+  editingOrderId = o.id;
+  document.getElementById('orderForm').querySelector('h2').textContent = 'Editar pedido #' + o.number;
+  document.getElementById('saveOrder').textContent = 'Salvar alterações';
+  document.getElementById('cname').value = o.customer || '';
+  document.getElementById('cphone').value = o.phone || '';
+  document.getElementById('caddress').value = o.address || '';
+  document.getElementById('payment').value = o.payment || 'Pix';
+  document.getElementById('notes').value = o.notes || '';
+  document.getElementById('deliveryFee').value = Number(o.deliveryFee || 0);
+  document.getElementById('courierName').value = o.courierName || '';
+  document.getElementById('courierPay').value = Number(o.courierPay || 0);
+  document.getElementById('orderItems').innerHTML = '';
+  itemCounter = 0;
+
+  (o.items || []).forEach(item => {
+    addOrderRow(item.productId || '', item.qty || 1, item.borderValue || 0);
+  });
+  if (!(o.items || []).length) addOrderRow();
+
+  document.getElementById('orderForm').classList.remove('hidden');
+  calcTotal();
+  document.getElementById('orderForm').scrollIntoView({behavior:'smooth', block:'start'});
+}
+window.editOrder = editOrder;
 
 function renderOrders() {
   let status = document.getElementById('statusFilter')?.value || '';
@@ -413,6 +454,7 @@ function renderOrders() {
         ${o.address ? `<p class="muted">Endereço: ${esc(o.address)}</p>` : ''}
         ${o.phone ? `<p class="muted">Telefone: ${esc(o.phone)}</p>` : ''}
         ${o.notes ? `<p class="muted">Obs.: ${esc(o.notes)}</p>` : ''}
+        <p class="muted">Subtotal: ${brl(o.subtotal ?? (o.total - (o.deliveryFee || 0)))} · Taxa: ${brl(o.deliveryFee || 0)} · Entregador: ${esc(o.courierName || 'Não informado')} (${brl(o.courierPay || 0)})</p>
 
         <div class="formrow">
           <div>
@@ -426,7 +468,7 @@ function renderOrders() {
           <div>
             <label>Itens e quantidades</label>
             <div class="muted">
-              ${o.items.map(i => `${i.qty} × ${brl(i.price)} = ${brl(i.subtotal)}`).join('<br>')}
+              ${o.items.map(i => `${i.qty} × ${brl(i.price)} = ${brl(i.subtotal ?? (i.price * i.qty))}`).join('<br>')}
             </div>
           </div>
         </div>
