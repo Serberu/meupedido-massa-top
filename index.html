@@ -270,7 +270,7 @@ function addOrderRow(productId='',qty=1,borderValue=0){
       <button type="button" class="danger oi-remove">Remover item</button>
     </div>`;
   document.getElementById('orderItems').appendChild(row);
-  row.querySelector('.oi-border').value = borderValue ?? '';
+  row.querySelector('.oi-border').value = '';
   row.querySelectorAll('select,input').forEach(e=>e.addEventListener('input',calcTotal));
   row.querySelector('.oi-remove').onclick=()=>{row.remove();calcTotal()};
   calcTotal();
