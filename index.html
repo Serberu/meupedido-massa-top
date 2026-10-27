@@ -346,8 +346,9 @@ function editOrder(id) {
     row.querySelector('.oi-border').value = Number(item.borderValue || 0);
   });
 
-  document.getElementById('orderForm').classList.remove('hidden');
-  calcTotal();
+const form = document.getElementById('orderForm');
+form.classList.remove('hidden');
+form.style.display = 'block';  calcTotal();
 
   document.getElementById('orderForm').scrollIntoView({
     behavior: 'smooth',
