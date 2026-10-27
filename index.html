@@ -141,7 +141,81 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
 function renderAll(){renderStats();renderProducts();renderOrders();renderRecent()}
-function renderStats(){let today=new Date().toDateString(),orders=db.orders.filter(o=>new Date(o.created).toDateString()===today&&o.status!=='Cancelado'),sales=orders.filter(o=>o.status==='Entregue').reduce((s,o)=>s+o.total,0);document.getElementById('stats').innerHTML=`<div class="stat"><span>Produtos cadastrados</span><strong>${db.products.length}</strong></div><div class="stat"><span>Pedidos de hoje</span><strong>${orders.length}</strong></div><div class="stat"><span>Vendas entregues hoje</span><strong>${brl(sales)}</strong></div><div class="stat"><span>Pedidos em aberto</span><strong>${db.orders.filter(o=>!['Entregue','Cancelado'].includes(o.status)).length}</strong></div>`}
+
+function renderStats() {
+  let today = new Date().toDateString();
+
+  let orders = db.orders.filter(o =>
+    new Date(o.created).toDateString() === today &&
+    o.status !== 'Cancelado'
+  );
+
+  let sales = orders
+    .filter(o => o.status === 'Entregue')
+    .reduce((s, o) => s + Number(o.total || 0), 0);
+
+  let entregadores = {};
+
+  db.orders
+    .filter(o => o.status !== 'Cancelado')
+    .forEach(o => {
+      let nome = (o.courierName || '').trim();
+      let valor = Number(o.courierPay || 0);
+
+      if (!nome || valor <= 0) return;
+
+      if (!entregadores[nome]) {
+        entregadores[nome] = {
+          pedidos: 0,
+          total: 0
+        };
+      }
+
+      entregadores[nome].pedidos++;
+      entregadores[nome].total += valor;
+    });
+
+  let resumoEntregadores = Object.entries(entregadores)
+    .map(([nome, dados]) => `
+      <div class="stat">
+        <span>${nome} — ${dados.pedidos} entregas</span>
+        <strong>${brl(dados.total)}</strong>
+      </div>
+    `).join('');
+
+  document.getElementById('stats').innerHTML = `
+    <div class="stat">
+      <span>Produtos cadastrados</span>
+      <strong>${db.products.length}</strong>
+    </div>
+
+    <div class="stat">
+      <span>Pedidos de hoje</span>
+      <strong>${orders.length}</strong>
+    </div>
+
+    <div class="stat">
+      <span>Vendas entregues hoje</span>
+      <strong>${brl(sales)}</strong>
+    </div>
+
+    <div class="stat">
+      <span>Pedidos em aberto</span>
+      <strong>${db.orders.filter(o =>
+        !['Entregue', 'Cancelado'].includes(o.status)
+      ).length}</strong>
+    </div>
+
+    <div class="stat">
+      <span>Total devido aos entregadores</span>
+      <strong>${brl(Object.values(entregadores)
+        .reduce((s, e) => s + e.total, 0))}</strong>
+    </div>
+
+    ${resumoEntregadores}
+  `;
+}
+
 function renderProducts(){let q=(document.getElementById('productSearch')?.value||'').toLowerCase(),list=db.products.filter(p=>(p.name+' '+p.category).toLowerCase().includes(q));document.getElementById('productList').innerHTML=list.length?list.map(p=>`<div class="item"><div class="itemtop"><div><h3>${esc(p.name)}</h3><div class="muted">${esc(p.category)} · ${p.available?'Disponível':'Indisponível'}</div></div><div class="price">${brl(p.price)}</div></div><div class="actions"><button class="secondary" onclick="editP('${p.id}')">Editar</button><button class="secondary" onclick="toggleP('${p.id}')">${p.available?'Marcar indisponível':'Marcar disponível'}</button><button class="danger" onclick="deleteP('${p.id}')">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum produto cadastrado. Clique em “Novo produto”.</div>'}
 document.getElementById('productSearch').oninput=renderProducts;
 document.getElementById('newProduct').onclick=()=>{editProduct=null;document.getElementById('productFormTitle').textContent='Novo produto';['pname','pcat','pprice'].forEach(id=>document.getElementById(id).value='');document.getElementById('pavailable').value='sim';document.getElementById('productForm').classList.remove('hidden')};
