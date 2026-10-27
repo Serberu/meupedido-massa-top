@@ -279,8 +279,7 @@ function addOrderRow(productId='',qty=1){
 function calcTotal(){
   let total = 0;
 
-  document.querySelectorAll('.orderrow').forEach(
-    r => {
+  document.querySelectorAll('.orderrow').forEach(r => {
     let p = db.products.find(
       p => p.id === r.querySelector('.oi-product').value
     );
@@ -311,57 +310,11 @@ function calcTotal(){
   document.getElementById('orderTotal').textContent = brl(total);
 }
 
-let editingOrderId = null;
-
-function editOrder(id) {
-  const o = db.orders.find(order => order.id === id);
-
-  if (!o) {
-    alert('Pedido não encontrado.');
-    return;
-  }
-
-  if (['Entregue', 'Cancelado'].includes(o.status)) {
-    alert('Este pedido não pode mais ser editado.');
-    return;
-  }
-
-  editingOrderId = o.id;
-
-  document.getElementById('cname').value = o.customer || '';
-  document.getElementById('cphone').value = o.phone || '';
-  document.getElementById('caddress').value = o.address || '';
-  document.getElementById('payment').value = o.payment || '';
-  document.getElementById('notes').value = o.notes || '';
-  document.getElementById('deliveryFee').value = Number(o.deliveryFee || 0);
-
-  document.getElementById('orderItems').innerHTML = '';
-
-  (o.items || []).forEach(item => {
-    addOrderRow(item.productId || '', item.qty || 1);
-
-    const rows = document.querySelectorAll('.orderrow');
-    const row = rows[rows.length - 1];
-
-    row.querySelector('.oi-border').value = Number(item.borderValue || 0);
-  });
-
-const form = document.getElementById('orderForm');
-form.classList.remove('hidden');
-form.style.display = 'block';  calcTotal();
-
-  document.getElementById('orderForm').scrollIntoView({
-    behavior: 'smooth',
-    block: 'start'
-  });
-}
-
 
 document.getElementById('deliveryFee').addEventListener('input', calcTotal);
 
 document.getElementById('newOrder').onclick=()=>{document.getElementById('cname').value='';document.getElementById('cphone').value='';document.getElementById('caddress').value='';document.getElementById('payment').value='Pix';document.getElementById('notes').value='';document.getElementById('orderItems').innerHTML='';itemCounter=0;addOrderRow();document.getElementById('orderForm').classList.remove('hidden');window.scrollTo(0,0)};
 document.getElementById('addItem').onclick=()=>addOrderRow();document.getElementById('cancelOrder').onclick=()=>document.getElementById('orderForm').classList.add('hidden');
-
 
 
 document.getElementById('saveOrder').onclick = () => {
@@ -372,20 +325,27 @@ document.getElementById('saveOrder').onclick = () => {
       p => p.id === r.querySelector('.oi-product').value
     );
 
-    const qty = Math.floor(Number(r.querySelector('.oi-qty').value) || 0);
-    const borderValue = Math.max(0, Number(r.querySelector('.oi-border')?.value) || 0);
+    const qty = Math.floor(
+      Number(r.querySelector('.oi-qty').value) || 0
+    );
+
+    const borderValue = Math.max(
+      0,
+      Number(r.querySelector('.oi-border')?.value) || 0
+    );
 
     if (!p || qty <= 0) return null;
 
-    const price = Number(p.price) || 0;
+    const unitPrice = Number(p.price) || 0;
+    const subtotal = (unitPrice + borderValue) * qty;
 
     return {
       productId: p.id,
       name: p.name,
-      price,
+      price: unitPrice,
       qty,
       borderValue,
-      subtotal: (price + borderValue) * qty
+      subtotal
     };
   }).filter(Boolean);
 
@@ -394,160 +354,39 @@ document.getElementById('saveOrder').onclick = () => {
     return;
   }
 
-  const deliveryFee = Math.max(0, Number(document.getElementById('deliveryFee').value) || 0);
+  const deliveryFee = Math.max(
+    0,
+    Number(document.getElementById('deliveryFee').value) || 0
+  );
+
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const total = subtotal + deliveryFee;
 
-  if (editingOrderId) {
-    const order = db.orders.find(o => o.id === editingOrderId);
+  const order = {
+    id: uid(),
+    number: Math.max(0, ...db.orders.map(o => Number(o.number) || 0)) + 1,
+    customer: document.getElementById('cname').value.trim() || 'Cliente',
+    phone: document.getElementById('cphone').value.trim(),
+    address: document.getElementById('caddress').value.trim(),
+   payment: document.getElementById('payment').value,
+notes: document.getElementById('notes').value.trim(),
+courierName: document.getElementById('courierName')?.value.trim() || '',
+courierPay: Math.max(0, Number(document.getElementById('courierPay')?.value) || 0),
+items,
+    subtotal,
+    deliveryFee,
+    total,
+    status: 'Recebido',
+    created: new Date().toISOString()
+  };
 
-    if (!order) {
-      alert('Pedido não encontrado.');
-      editingOrderId = null;
-      return;
-    }
-
-    order.customer = document.getElementById('cname').value.trim() || 'Cliente';
-    order.phone = document.getElementById('cphone').value.trim();
-    order.address = document.getElementById('caddress').value.trim();
-    order.payment = document.getElementById('payment').value;
-    order.notes = document.getElementById('notes').value.trim();
-    order.items = items;
-    order.subtotal = subtotal;
-    order.deliveryFee = deliveryFee;
-    order.total = total;
-  } else {
-    const order = {
-      id: uid(),
-      number: Math.max(0, ...db.orders.map(o => Number(o.number) || 0)) + 1,
-      customer: document.getElementById('cname').value.trim() || 'Cliente',
-      phone: document.getElementById('cphone').value.trim(),
-      address: document.getElementById('caddress').value.trim(),
-      payment: document.getElementById('payment').value,
-      notes: document.getElementById('notes').value.trim(),
-      courierName: '',
-      courierPay: deliveryFee,
-      items,
-      subtotal,
-      deliveryFee,
-      total,
-      status: 'Recebido',
-      created: new Date().toISOString()
-    };
-
-    db.orders.unshift(order);
-  }
-
-  editingOrderId = null;
+  db.orders.unshift(order);
   document.getElementById('orderForm').classList.add('hidden');
   save();
   setPage('pedidos');
 };
 
-function renderOrders() {
-  let status = document.getElementById('statusFilter')?.value || '';
-  let q = (document.getElementById('orderSearch')?.value || '').toLowerCase();
-
-  let orders = db.orders.filter(o =>
-    (!status || o.status === status) &&
-    (o.customer + ' ' + o.phone + ' ' + o.number).toLowerCase().includes(q)
-  );
-
-  document.getElementById('orderList').innerHTML = orders.length
-    ? orders.map(o => `
-      <div class="item">
-        <div class="itemtop">
-          <div>
-            <h3>Pedido #${o.number} · ${esc(o.customer)}</h3>
-            <div class="muted">
-              ${new Date(o.created).toLocaleString('pt-BR')} · ${esc(o.payment)}
-            </div>
-          </div>
-          <div class="price">${brl(o.total)}</div>
-        </div>
-
-        <p>${o.items.map(i => `${i.qty}× ${esc(i.name)}`).join(' · ')}</p>
-        ${o.address ? `<p class="muted">Endereço: ${esc(o.address)}</p>` : ''}
-        ${o.phone ? `<p class="muted">Telefone: ${esc(o.phone)}</p>` : ''}
-        ${o.notes ? `<p class="muted">Obs.: ${esc(o.notes)}</p>` : ''}
-        <p class="muted">Produtos: ${brl(o.subtotal || 0)} · Entrega: ${brl(o.deliveryFee || 0)}</p>
-
-        <div class="formrow">
-          <div>
-            <label>Status</label>
-            <select onchange="changeStatus('${o.id}',this.value)">
-              ${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado']
-                .map(s => `<option ${o.status === s ? 'selected' : ''}>${s}</option>`)
-                .join('')}
-            </select>
-          </div>
-          <div>
-            <label>Itens e quantidades</label>
-            <div class="muted">
-              ${o.items.map(i => `${i.qty} × ${brl(i.price)} = ${brl(i.subtotal)}`).join('<br>')}
-            </div>
-          </div>
-        </div>
-
-        <div class="actions">
-          ${!['Entregue', 'Cancelado'].includes(o.status)
-            ? `<button class="primary" onclick="editOrder('${o.id}')">Editar pedido</button>`
-            : ''}
-          <button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button>
-        </div>
-      </div>
-    `).join('')
-    : '<div class="empty">Ainda não há pedidos com esses filtros.</div>';
-}
-
-
-  document.getElementById('orderList').innerHTML = orders.length
-    ? orders.map(o => `
-      <div class="item">
-        <div class="itemtop">
-          <div>
-            <h3>Pedido #${o.number} · ${esc(o.customer)}</h3>
-            <div class="muted">
-              ${new Date(o.created).toLocaleString('pt-BR')} · ${esc(o.payment)}
-            </div>
-          </div>
-          <div class="price">${brl(o.total)}</div>
-        </div>
-
-        <p>${o.items.map(i => `${i.qty}× ${esc(i.name)}`).join(' · ')}</p>
-
-        ${o.address ? `<p class="muted">Endereço: ${esc(o.address)}</p>` : ''}
-        ${o.phone ? `<p class="muted">Telefone: ${esc(o.phone)}</p>` : ''}
-        ${o.notes ? `<p class="muted">Obs.: ${esc(o.notes)}</p>` : ''}
-
-        <div class="formrow">
-          <div>
-            <label>Status</label>
-            <select onchange="changeStatus('${o.id}',this.value)">
-              ${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado']
-                .map(s => `<option ${o.status === s ? 'selected' : ''}>${s}</option>`)
-                .join('')}
-            </select>
-          </div>
-          <div>
-            <label>Itens e quantidades</label>
-            <div class="muted">
-              ${o.items.map(i => `${i.qty} × ${brl(i.price)} = ${brl(i.subtotal)}`).join('<br>')}
-            </div>
-          </div>
-        </div>
-
-        <div class="actions">
-          ${!['Entregue', 'Cancelado'].includes(o.status)
-            ? `<button class="primary" onclick="editOrder('${o.id}')">Editar pedido</button>`
-            : ''}
-          <button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button>
-        </div>
-      </div>
-    `).join('')
-    : '<div class="empty">Ainda não há pedidos com esses filtros.</div>';
-}
-
+function renderOrders(){let status=document.getElementById('statusFilter')?.value||'',q=(document.getElementById('orderSearch')?.value||'').toLowerCase(),orders=db.orders.filter(o=>(!status||o.status===status)&&(o.customer+' '+o.phone+' '+o.number).toLowerCase().includes(q));document.getElementById('orderList').innerHTML=orders.length?orders.map(o=>`<div class="item"><div class="itemtop"><div><h3>Pedido #${o.number} · ${esc(o.customer)}</h3><div class="muted">${new Date(o.created).toLocaleString('pt-BR')} · ${esc(o.payment)}</div></div><div class="price">${brl(o.total)}</div></div><p>${o.items.map(i=>`${i.qty}× ${esc(i.name)}`).join(' · ')}</p>${o.address?`<p class="muted">Endereço: ${esc(o.address)}</p>`:''}${o.phone?`<p class="muted">Telefone: ${esc(o.phone)}</p>`:''}${o.notes?`<p class="muted">Obs.: ${esc(o.notes)}</p>`:''}<div class="formrow"><div><label>Status</label><select onchange="changeStatus('${o.id}',this.value)">${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado'].map(s=>`<option ${o.status===s?'selected':''}>${s}</option>`).join('')}</select></div><div><label>Itens e quantidades</label><div class="muted">${o.items.map(i=>`${i.qty} × ${brl(i.price)} = ${brl(i.subtotal)}`).join('<br>')}</div></div></div><div class="actions"><button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button></div></div>`).join(''):'<div class="empty">Ainda não há pedidos com esses filtros.</div>'}
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
 window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
 function renderRecent(){let list=db.orders.slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
