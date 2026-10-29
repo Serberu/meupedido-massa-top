@@ -1,4 +1,4 @@
-<!doctype html>
+F<!doctype html>
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -66,7 +66,32 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <div class="toolbar"><select id="statusFilter"><option value="">Todos os status</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
 <div id="orderForm" class="panel hidden">
 <h2>Novo pedido</h2>
-<div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div><div><label for="payment">Forma de pagamento</label><select id="payment"><option>Pix</option><option>Dinheiro</option><option>Cartão</option><option>Na entrega</option></select></div></div>
+ 
+<div class="formrow">
+  <div>
+    <label for="cname">Nome do cliente</label>
+    <input id="cname" placeholder="Nome">
+  </div>
+  <div>
+    <label for="cphone">Telefone</label>
+    <input id="cphone" placeholder="Telefone (opcional)">
+  </div>
+  <div>
+    <label for="caddress">Endereço / entrega</label>
+    <input id="caddress" placeholder="Endereço (opcional)">
+  </div>
+  <div>
+    <label for="payment">Forma de pagamento</label>
+    <select id="payment">
+      <option>Pix</option>
+      <option>Dinheiro</option>
+      <option>Cartão de débito</option>
+      <option>Cartão de crédito</option>
+      <option>Na entrega</option>
+    </select>
+  </div>
+</div>
+ 
 <label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
 
 <label for="deliveryFee">Taxa de entrega (R$)</label>
@@ -114,6 +139,10 @@ db.borderPrices ||= {
   Mussarela: 0,
   Requeijão: 0
 };
+db.paymentFees ||= {
+  debit: 1.5,
+  credit: 3.5
+};  
   const borderFields = {
   Catupiry: 'borderCatupiry',
   Chocolate: 'borderChocolate',
@@ -158,79 +187,46 @@ function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.c
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
 function renderAll(){renderStats();renderProducts();renderOrders();renderRecent()}
 
-function renderStats() {
-  let today = new Date().toDateString();
+window.savePaymentFees = function() {
+  const debit = Number(document.getElementById('feeDebit').value);
+  const credit = Number(document.getElementById('feeCredit').value);
 
-  let orders = db.orders.filter(o =>
-    new Date(o.created).toDateString() === today &&
-    o.status !== 'Cancelado'
-  );
+  if (
+    !Number.isFinite(debit) ||
+    !Number.isFinite(credit) ||
+    debit < 0 || debit > 100 ||
+    credit < 0 || credit > 100
+  ) {
+    alert('Informe taxas entre 0 e 100%.');
+    return;
+  }
 
-  let sales = orders
-    .filter(o => o.status === 'Entregue')
-    .reduce((s, o) => s + Number(o.total || 0), 0);
+  db.paymentFees = { debit, credit };
+  save();
 
-  let entregadores = {};
+  alert('Taxas salvas com sucesso!');
+};
+ 
+window.savePaymentFees = function() {
+  const debit = Number(document.getElementById('feeDebit').value);
+  const credit = Number(document.getElementById('feeCredit').value);
 
-  db.orders
-    .filter(o => o.status !== 'Cancelado')
-    .forEach(o => {
-      let nome = (o.courierName || '').trim();
-      let valor = Number(o.courierPay || 0);
+  if (
+    !Number.isFinite(debit) ||
+    !Number.isFinite(credit) ||
+    debit < 0 || debit > 100 ||
+    credit < 0 || credit > 100
+  ) {
+    alert('Informe taxas entre 0 e 100%.');
+    return;
+  }
 
-      if (!nome || valor <= 0) return;
+  db.paymentFees = { debit, credit };
+  save();
 
-      if (!entregadores[nome]) {
-        entregadores[nome] = {
-          pedidos: 0,
-          total: 0
-        };
-      }
-
-      entregadores[nome].pedidos++;
-      entregadores[nome].total += valor;
-    });
-
-  let resumoEntregadores = Object.entries(entregadores)
-    .map(([nome, dados]) => `
-      <div class="stat">
-        <span>${nome} — ${dados.pedidos} entregas</span>
-        <strong>${brl(dados.total)}</strong>
-      </div>
-    `).join('');
-
-  document.getElementById('stats').innerHTML = `
-    <div class="stat">
-      <span>Produtos cadastrados</span>
-      <strong>${db.products.length}</strong>
-    </div>
-
-    <div class="stat">
-      <span>Pedidos de hoje</span>
-      <strong>${orders.length}</strong>
-    </div>
-
-    <div class="stat">
-      <span>Vendas entregues hoje</span>
-      <strong>${brl(sales)}</strong>
-    </div>
-
-    <div class="stat">
-      <span>Pedidos em aberto</span>
-      <strong>${db.orders.filter(o =>
-        !['Entregue', 'Cancelado'].includes(o.status)
-      ).length}</strong>
-    </div>
-
-    <div class="stat">
-      <span>Total devido aos entregadores</span>
-      <strong>${brl(Object.values(entregadores)
-        .reduce((s, e) => s + e.total, 0))}</strong>
-    </div>
-
-    ${resumoEntregadores}
-  `;
-}
+  alert('Taxas salvas com sucesso!');
+};
+ 
 
 function renderProducts(){let q=(document.getElementById('productSearch')?.value||'').toLowerCase(),list=db.products.filter(p=>(p.name+' '+p.category).toLowerCase().includes(q));document.getElementById('productList').innerHTML=list.length?list.map(p=>`<div class="item"><div class="itemtop"><div><h3>${esc(p.name)}</h3><div class="muted">${esc(p.category)} · ${p.available?'Disponível':'Indisponível'}</div></div><div class="price">${brl(p.price)}</div></div><div class="actions"><button class="secondary" onclick="editP('${p.id}')">Editar</button><button class="secondary" onclick="toggleP('${p.id}')">${p.available?'Marcar indisponível':'Marcar disponível'}</button><button class="danger" onclick="deleteP('${p.id}')">Excluir</button></div></div>`).join(''):'<div class="empty">Nenhum produto cadastrado. Clique em “Novo produto”.</div>'}
 document.getElementById('productSearch').oninput=renderProducts;
