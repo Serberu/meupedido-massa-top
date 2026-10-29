@@ -474,7 +474,22 @@ function calcTotal(){
 }
 
 
-document.getElementById('deliveryFee').addEventListener('input', calcTotal);
+
+let valorEntregadorEditadoManualmente = false;
+
+document.getElementById('deliveryFee').addEventListener('input', function () {
+  const valorEntregador = document.getElementById('courierPay');
+
+  if (!valorEntregadorEditadoManualmente) {
+    valorEntregador.value = this.value;
+  }
+
+  calcTotal();
+});
+
+document.getElementById('courierPay').addEventListener('input', function () {
+  valorEntregadorEditadoManualmente = true;
+});
 
 document.getElementById('newOrder').onclick=()=>{
   editingOrderId=null;
@@ -488,6 +503,7 @@ document.getElementById('newOrder').onclick=()=>{
   document.getElementById('deliveryFee').value='';
   document.getElementById('courierName').value='';
   document.getElementById('courierPay').value='';
+  valorEntregadorEditadoManualmente = false;
   document.getElementById('orderItems').innerHTML='';
   itemCounter=0;
   addOrderRow();
