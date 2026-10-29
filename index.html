@@ -99,6 +99,22 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <div id="orderForm" class="panel hidden">
 <h2>Novo pedido</h2>
 <div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div><div><label for="payment">Forma de pagamento</label><select id="payment"><option>Pix</option><option>Dinheiro</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Na entrega</option><option value="Cartão" hidden>Cartão (registro antigo)</option></select></div></div>
+  <div class="panel" style="margin-top:12px">
+  <h3>Pagamento dividido</h3>
+  <p>Preencha quanto o cliente pagou em cada forma.</p>
+
+  <label for="paidPix">Pix (R$)</label>
+  <input id="paidPix" type="number" min="0" step="0.01" value="0">
+
+  <label for="paidCash">Dinheiro (R$)</label>
+  <input id="paidCash" type="number" min="0" step="0.01" value="0">
+
+  <label for="paidCard">Cartão (R$)</label>
+  <input id="paidCard" type="number" min="0" step="0.01" value="0">
+
+  <p>Valor pago: <b id="paidTotal">R$ 0,00</b></p>
+  <p>Falta receber: <b id="remainingTotal">R$ 0,00</b></p>
+</div>
 <label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
 
 <label for="deliveryFee">Taxa de entrega (R$)</label>
@@ -471,7 +487,16 @@ function calcTotal(){
   total += taxa;
 
   document.getElementById('orderTotal').textContent = brl(total);
+    const pix = Math.max(0, Number(document.getElementById('paidPix').value) || 0);
+  const dinheiro = Math.max(0, Number(document.getElementById('paidCash').value) || 0);
+  const cartao = Math.max(0, Number(document.getElementById('paidCard').value) || 0);
+
+  const pago = pix + dinheiro + cartao;
+
+  document.getElementById('paidTotal').textContent = brl(pago);
+  document.getElementById('remainingTotal').textContent = brl(Math.max(0, total - pago));
 }
+
 
 
 
@@ -499,6 +524,9 @@ document.getElementById('newOrder').onclick=()=>{
   document.getElementById('cphone').value='';
   document.getElementById('caddress').value='';
   document.getElementById('payment').value='Pix';
+  document.getElementById('paidPix').value = 0;
+document.getElementById('paidCash').value = 0;
+document.getElementById('paidCard').value = 0;
   document.getElementById('notes').value='';
   document.getElementById('deliveryFee').value='';
   document.getElementById('courierName').value='';
@@ -515,6 +543,9 @@ document.getElementById('cancelOrder').onclick=()=>{
   editingOrderId=null;
   document.getElementById('orderForm').classList.add('hidden');
 };
+['paidPix', 'paidCash', 'paidCard'].forEach(id => {
+  document.getElementById(id).addEventListener('input', calcTotal);
+});
 
 
 document.getElementById('saveOrder').onclick = () => {
@@ -537,6 +568,11 @@ document.getElementById('saveOrder').onclick = () => {
   const deliveryFee = Math.max(0, Number(document.getElementById('deliveryFee').value) || 0);
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const total = subtotal + deliveryFee;
+    const paidPix = Math.max(0, Number(document.getElementById('paidPix').value) || 0);
+  const paidCash = Math.max(0, Number(document.getElementById('paidCash').value) || 0);
+  const paidCard = Math.max(0, Number(document.getElementById('paidCard').value) || 0);
+  const amountPaid = paidPix + paidCash + paidCard;
+  const remaining = Math.max(0, total - amountPaid);
   const existing = editingOrderId ? db.orders.find(o => o.id === editingOrderId) : null;
 
   const order = {
@@ -547,6 +583,11 @@ document.getElementById('saveOrder').onclick = () => {
     phone: document.getElementById('cphone').value.trim(),
     address: document.getElementById('caddress').value.trim(),
     payment: document.getElementById('payment').value,
+        paidPix,
+    paidCash,
+    paidCard,
+    amountPaid,
+    remaining,
     notes: document.getElementById('notes').value.trim(),
     courierName: document.getElementById('courierName').value.trim(),
     courierPay: Math.max(0, Number(document.getElementById('courierPay').value) || 0),
@@ -657,6 +698,7 @@ function renderOrders() {
             ? `<button type="button" class="primary" data-edit-order="${esc(o.id)}">Editar pedido</button>`
             : ''}
           <button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button>
+          <button type="button" class="primary" data-print-order="${esc(o.id)}">🖨️ Imprimir pedido</button>
         </div>
       </div>
     `).join('')
@@ -665,11 +707,81 @@ function renderOrders() {
 
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
 window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
+
+window.printOrder = (id) => {
+  const o = db.orders.find(order => order.id === id);
+  if (!o) {
+    alert('Pedido não encontrado.');
+    return;
+  }
+
+  const receipt = window.open('', '_blank', 'width=400,height=700');
+  if (!receipt) {
+    alert('Permita abrir janelas pop-up para imprimir o pedido.');
+    return;
+  }
+
+  const items = o.items.map(i => `
+    <tr>
+      <td>${esc(i.qty + 'x ' + i.name)}</td>
+      <td style="text-align:right">${brl(i.subtotal ?? (i.price * i.qty))}</td>
+    </tr>
+  `).join('');
+
+  receipt.document.write(`
+    <!DOCTYPE html>
+    <html lang="pt-BR">
+    <head>
+      <meta charset="UTF-8">
+      <title>Pedido #${o.number}</title>
+      <style>
+        body { font-family: Arial, sans-serif; width: 280px; margin: 10px auto; font-size: 14px; }
+        h2, p { text-align: center; }
+        table { width: 100%; border-collapse: collapse; }
+        td { padding: 5px 0; vertical-align: top; }
+        .line { border-top: 1px dashed #000; margin: 10px 0; }
+        .total { font-size: 18px; font-weight: bold; }
+        @media print { button { display: none; } }
+      </style>
+    </head>
+    <body>
+      <h2>Massa Top</h2>
+      <p>Pedido #${o.number}<br>${new Date(o.created).toLocaleString('pt-BR')}</p>
+      <div class="line"></div>
+      <p style="text-align:left"><b>Cliente:</b> ${esc(o.customer)}<br>
+      <b>Telefone:</b> ${esc(o.phone || 'Não informado')}<br>
+      <b>Endereço:</b> ${esc(o.address || 'Não informado')}</p>
+      <div class="line"></div>
+      <table>${items}</table>
+      <div class="line"></div>
+      <p style="text-align:left">
+        Subtotal: ${brl(o.subtotal ?? o.total)}<br>
+        Taxa de entrega: ${brl(o.deliveryFee || 0)}
+      </p>
+      <p class="total">TOTAL: ${brl(o.total)}</p>
+      <p style="text-align:left">Pagamento: ${esc(o.payment || '')}<br>
+      Entregador: ${esc(o.courierName || 'Não informado')}<br>
+      Observações: ${esc(o.notes || 'Nenhuma')}</p>
+      <div class="line"></div>
+      <p>Obrigado pela preferência!</p>
+      <button onclick="window.print()">Imprimir</button>
+    </body>
+    </html>
+  `);
+
+  receipt.document.close();
+};
+
 // Botão Editar: usa delegação de eventos para continuar funcionando após a lista ser redesenhada.
 document.getElementById('orderList').addEventListener('click', function(event) {
   const button = event.target.closest('[data-edit-order]');
   if (!button) return;
   editOrder(button.getAttribute('data-edit-order'));
+});
+document.getElementById('orderList').addEventListener('click', function(event) {
+  const button = event.target.closest('[data-print-order]');
+  if (!button) return;
+  printOrder(button.getAttribute('data-print-order'));
 });
 
 function currentMonthValue(){
