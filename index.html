@@ -22,7 +22,7 @@ h2{font-size:20px;margin:4px 0 14px}.toolbar{display:flex;gap:8px;flex-wrap:wrap
 input,select,textarea{width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font:inherit;background:white}label{display:block;font-size:13px;font-weight:700;margin:10px 0 5px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.item{margin-bottom:10px}.itemtop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.item h3{font-size:16px;margin:0 0 5px}.muted{color:var(--muted);font-size:13px}.price{font-weight:800;font-size:17px;white-space:nowrap}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.actions button{padding:8px 10px;font-size:12px}.status{display:inline-block;background:#fff3cd;border-radius:20px;padding:5px 9px;font-size:12px;font-weight:700}
 .formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.empty{padding:28px;text-align:center;color:var(--muted);background:white;border:1px dashed #ccc;border-radius:12px}
 #notice{padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:9px;font-size:13px;margin-bottom:14px}
-.hidden{display:none!important}.right{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.qty{display:flex;gap:8px;align-items:center}.qty input{width:90px}
+.hidden{display:none!important}#splitPaymentFields.hidden{display:none!important}.right{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.qty{display:flex;gap:8px;align-items:center}.qty input{width:90px}
 footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-size:12px}
 @media(max-width:520px){main{padding:10px}header h1{font-size:21px}.tab{flex:1;padding:10px 8px}}
 </style>
@@ -108,7 +108,6 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
     <option value="Dinheiro">Dinheiro</option>
     <option value="Cartão de débito">Cartão de débito</option>
     <option value="Cartão de crédito">Cartão de crédito</option>
-    <option value="Outro / na entrega">Outro / na entrega</option>
     <option value="Dividido">Dividido</option>
   </select>
   <div id="splitPaymentFields" class="hidden" style="margin-top:12px">
@@ -221,7 +220,9 @@ function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()
 function todayKey(){return localDateKey(new Date())}
 function paymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
 function paymentMethodFromOrder(o){
-  if(o.payment && o.payment !== 'Pagamento dividido') return o.payment;
+  if(o.payment && o.payment !== 'Pagamento dividido') {
+    return o.payment==='Outro / na entrega' || o.payment==='Outro' ? 'Dividido' : o.payment;
+  }
   if(o.paymentBreakdown){
     const p=paymentParts(o),used=[['pix','Pix'],['cash','Dinheiro'],['debit','Cartão de débito'],['credit','Cartão de crédito'],['other','Outro / na entrega']].filter(([k])=>p[k]>0);
     if(used.length===1)return used[0][1];
@@ -575,7 +576,7 @@ document.getElementById('saveOrder').onclick = () => {
     const allocated=paymentBreakdown.pix+paymentBreakdown.cash+paymentBreakdown.debit+paymentBreakdown.credit+paymentBreakdown.other;
     if(Math.abs(allocated-total)>0.009){alert(`A soma dos pagamentos (${brl(allocated)}) precisa ser igual ao total do pedido (${brl(total)}).`);return;}
   }else{
-    const key={'Pix':'pix','Dinheiro':'cash','Cartão de débito':'debit','Cartão de crédito':'credit','Outro / na entrega':'other'}[selectedPayment];
+    const key={'Pix':'pix','Dinheiro':'cash','Cartão de débito':'debit','Cartão de crédito':'credit'}[selectedPayment];
     paymentBreakdown[key]=total;
   }
   const existing = editingOrderId ? db.orders.find(o => o.id === editingOrderId) : null;
@@ -874,7 +875,11 @@ document.getElementById('orderDateFilter')?.addEventListener('change',renderOrde
 function togglePaymentFields(){
   const method=document.getElementById('paymentMethod')?.value;
   const fields=document.getElementById('splitPaymentFields');
-  if(fields)fields.classList.toggle('hidden',method!=='Dividido');
+  if(fields){
+    const showSplit=method==='Dividido';
+    fields.hidden=!showSplit;
+    fields.classList.toggle('hidden',!showSplit);
+  }
 }
 function updatePaymentAllocated(){const ids=['payPix','payCash','payDebit','payCredit','payOther'];const sum=ids.reduce((s,id)=>s+(Number(document.getElementById(id)?.value)||0),0);const out=document.getElementById('paymentAllocated');if(out)out.textContent=brl(sum);}
 document.getElementById('paymentMethod')?.addEventListener('change',togglePaymentFields);
