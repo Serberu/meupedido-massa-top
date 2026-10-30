@@ -264,7 +264,7 @@ function renderStats() {
   ).length;
 
   const entregadores = {};
-  db.orders.filter(o => o.status !== 'Cancelado').forEach(o => {
+  entregues.forEach(o => {
     const nome = (o.courierName || '').trim();
     const valor = Number(o.courierPay || 0);
     if (!nome || valor <= 0) return;
