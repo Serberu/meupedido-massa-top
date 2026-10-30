@@ -99,7 +99,31 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <div id="orderForm" class="panel hidden">
 <h2>Novo pedido</h2>
 <div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div></div>
-<div class="panel" style="margin:12px 0;background:#fffdf5"><h3>Como o cliente vai pagar?</h3><p class="muted">Pode dividir o pagamento. Preencha somente os valores usados; a soma precisa ser igual ao total do pedido.</p><div class="formrow"><div><label for="payPix">Pix (R$)</label><input id="payPix" type="number" min="0" step="0.01" value="0"></div><div><label for="payCash">Dinheiro (R$)</label><input id="payCash" type="number" min="0" step="0.01" value="0"></div><div><label for="payDebit">Cartão de débito (R$)</label><input id="payDebit" type="number" min="0" step="0.01" value="0"></div><div><label for="payCredit">Cartão de crédito (R$)</label><input id="payCredit" type="number" min="0" step="0.01" value="0"></div><div><label for="payOther">Outro / na entrega (R$)</label><input id="payOther" type="number" min="0" step="0.01" value="0"></div><div><label for="payOtherName">Qual outro meio?</label><input id="payOtherName" placeholder="Ex.: vale, transferência"></div></div><p><b>Distribuído: <span id="paymentAllocated">R$ 0,00</span></b></p></div>
+<div class="panel" style="margin:12px 0;background:#fffdf5">
+  <h3>Forma de pagamento</h3>
+  <label for="paymentMethod">Como o cliente vai pagar?</label>
+  <select id="paymentMethod">
+    <option value="">Selecione a forma de pagamento</option>
+    <option value="Pix">Pix</option>
+    <option value="Dinheiro">Dinheiro</option>
+    <option value="Cartão de débito">Cartão de débito</option>
+    <option value="Cartão de crédito">Cartão de crédito</option>
+    <option value="Outro / na entrega">Outro / na entrega</option>
+    <option value="Dividido">Dividido</option>
+  </select>
+  <div id="splitPaymentFields" class="hidden" style="margin-top:12px">
+    <p class="muted">Informe quanto será pago em cada forma. A soma precisa ser igual ao total do pedido.</p>
+    <div class="formrow">
+      <div><label for="payPix">Pix (R$)</label><input id="payPix" type="number" min="0" step="0.01" value="0"></div>
+      <div><label for="payCash">Dinheiro (R$)</label><input id="payCash" type="number" min="0" step="0.01" value="0"></div>
+      <div><label for="payDebit">Cartão de débito (R$)</label><input id="payDebit" type="number" min="0" step="0.01" value="0"></div>
+      <div><label for="payCredit">Cartão de crédito (R$)</label><input id="payCredit" type="number" min="0" step="0.01" value="0"></div>
+      <div><label for="payOther">Outro / na entrega (R$)</label><input id="payOther" type="number" min="0" step="0.01" value="0"></div>
+      <div><label for="payOtherName">Qual outro meio?</label><input id="payOtherName" placeholder="Ex.: vale, transferência"></div>
+    </div>
+    <p><b>Distribuído: <span id="paymentAllocated">R$ 0,00</span></b></p>
+  </div>
+</div>
 <label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
 
 <label for="deliveryFee">Taxa de entrega (R$)</label>
@@ -196,6 +220,15 @@ function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function todayKey(){return localDateKey(new Date())}
 function paymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
+function paymentMethodFromOrder(o){
+  if(o.payment && o.payment !== 'Pagamento dividido') return o.payment;
+  if(o.paymentBreakdown){
+    const p=paymentParts(o),used=[['pix','Pix'],['cash','Dinheiro'],['debit','Cartão de débito'],['credit','Cartão de crédito'],['other','Outro / na entrega']].filter(([k])=>p[k]>0);
+    if(used.length===1)return used[0][1];
+    if(used.length>1)return 'Dividido';
+  }
+  return o.payment==='Pagamento dividido'?'Dividido':'';
+}
 function paymentLabel(o){if(!o.paymentBreakdown)return o.payment||'Não informado';const p=paymentParts(o),labels=[['pix','Pix'],['cash','Dinheiro'],['debit','Débito'],['credit','Crédito'],['other',o.paymentBreakdown.otherName||'Outro']];return labels.filter(([k])=>p[k]>0).map(([k,l])=>`${l}: ${brl(p[k])}`).join(' + ')||'Não informado'}
 function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entregue').reduce((sum,o)=>sum+paymentParts(o)[payment],0)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
@@ -489,7 +522,10 @@ document.getElementById('newOrder').onclick=()=>{
   document.getElementById('cname').value='';
   document.getElementById('cphone').value='';
   document.getElementById('caddress').value='';
-  ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id).value=0);document.getElementById('payOtherName').value='';updatePaymentAllocated();
+  document.getElementById('paymentMethod').value='';
+  ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id).value=0);
+  document.getElementById('payOtherName').value='';
+  togglePaymentFields();updatePaymentAllocated();
   document.getElementById('notes').value='';
   document.getElementById('deliveryFee').value='';
   document.getElementById('courierName').value='';
@@ -527,9 +563,21 @@ document.getElementById('saveOrder').onclick = () => {
   const deliveryFee = Math.max(0, Number(document.getElementById('deliveryFee').value) || 0);
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const total = subtotal + deliveryFee;
-  const paymentBreakdown={pix:Number(document.getElementById('payPix').value)||0,cash:Number(document.getElementById('payCash').value)||0,debit:Number(document.getElementById('payDebit').value)||0,credit:Number(document.getElementById('payCredit').value)||0,other:Number(document.getElementById('payOther').value)||0,otherName:document.getElementById('payOtherName').value.trim()};
-  const allocated=paymentBreakdown.pix+paymentBreakdown.cash+paymentBreakdown.debit+paymentBreakdown.credit+paymentBreakdown.other;
-  if(Math.abs(allocated-total)>0.009){alert(`A soma dos pagamentos (${brl(allocated)}) precisa ser igual ao total do pedido (${brl(total)}).`);return;}
+  const selectedPayment=document.getElementById('paymentMethod').value;
+  if(!selectedPayment){alert('Escolha a forma de pagamento.');return;}
+  const paymentBreakdown={pix:0,cash:0,debit:0,credit:0,other:0,otherName:document.getElementById('payOtherName').value.trim()};
+  if(selectedPayment==='Dividido'){
+    paymentBreakdown.pix=Number(document.getElementById('payPix').value)||0;
+    paymentBreakdown.cash=Number(document.getElementById('payCash').value)||0;
+    paymentBreakdown.debit=Number(document.getElementById('payDebit').value)||0;
+    paymentBreakdown.credit=Number(document.getElementById('payCredit').value)||0;
+    paymentBreakdown.other=Number(document.getElementById('payOther').value)||0;
+    const allocated=paymentBreakdown.pix+paymentBreakdown.cash+paymentBreakdown.debit+paymentBreakdown.credit+paymentBreakdown.other;
+    if(Math.abs(allocated-total)>0.009){alert(`A soma dos pagamentos (${brl(allocated)}) precisa ser igual ao total do pedido (${brl(total)}).`);return;}
+  }else{
+    const key={'Pix':'pix','Dinheiro':'cash','Cartão de débito':'debit','Cartão de crédito':'credit','Outro / na entrega':'other'}[selectedPayment];
+    paymentBreakdown[key]=total;
+  }
   const existing = editingOrderId ? db.orders.find(o => o.id === editingOrderId) : null;
 
   const order = {
@@ -539,7 +587,7 @@ document.getElementById('saveOrder').onclick = () => {
     customer: document.getElementById('cname').value.trim() || 'Cliente',
     phone: document.getElementById('cphone').value.trim(),
     address: document.getElementById('caddress').value.trim(),
-    payment: 'Pagamento dividido', paymentBreakdown,
+    payment: selectedPayment==='Dividido'?'Pagamento dividido':selectedPayment, paymentBreakdown,
     notes: document.getElementById('notes').value.trim(),
     courierName: document.getElementById('courierName').value.trim(),
     courierPay: Math.max(0, Number(document.getElementById('courierPay').value) || 0),
@@ -580,7 +628,15 @@ function editOrder(id) {
   document.getElementById('cname').value = o.customer || '';
   document.getElementById('cphone').value = o.phone || '';
   document.getElementById('caddress').value = o.address || '';
-  const parts=paymentParts(o);document.getElementById('payPix').value=parts.pix;document.getElementById('payCash').value=parts.cash;document.getElementById('payDebit').value=parts.debit;document.getElementById('payCredit').value=parts.credit;document.getElementById('payOther').value=parts.other;document.getElementById('payOtherName').value=o.paymentBreakdown?.otherName||'';updatePaymentAllocated();
+  const parts=paymentParts(o);
+  document.getElementById('payPix').value=parts.pix;
+  document.getElementById('payCash').value=parts.cash;
+  document.getElementById('payDebit').value=parts.debit;
+  document.getElementById('payCredit').value=parts.credit;
+  document.getElementById('payOther').value=parts.other;
+  document.getElementById('payOtherName').value=o.paymentBreakdown?.otherName||'';
+  document.getElementById('paymentMethod').value=paymentMethodFromOrder(o);
+  togglePaymentFields();updatePaymentAllocated();
   document.getElementById('notes').value = o.notes || '';
   document.getElementById('deliveryFee').value = Number(o.deliveryFee || 0);
   document.getElementById('courierName').value = o.courierName || '';
@@ -815,7 +871,13 @@ document.getElementById('closeDayBtn')?.addEventListener('click',()=>{
 });
 document.getElementById('orderDateFilter')?.addEventListener('change',renderOrders);
 
+function togglePaymentFields(){
+  const method=document.getElementById('paymentMethod')?.value;
+  const fields=document.getElementById('splitPaymentFields');
+  if(fields)fields.classList.toggle('hidden',method!=='Dividido');
+}
 function updatePaymentAllocated(){const ids=['payPix','payCash','payDebit','payCredit','payOther'];const sum=ids.reduce((s,id)=>s+(Number(document.getElementById(id)?.value)||0),0);const out=document.getElementById('paymentAllocated');if(out)out.textContent=brl(sum);}
+document.getElementById('paymentMethod')?.addEventListener('change',togglePaymentFields);
 ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id)?.addEventListener('input',updatePaymentAllocated));
 
 renderAll();
