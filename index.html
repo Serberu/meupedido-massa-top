@@ -40,7 +40,7 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 <div id="notice"><b>Importante:</b> esta versão gratuita salva os dados neste navegador e neste computador. Não sincroniza automaticamente com outros aparelhos. Use “Backup” para guardar uma cópia.</div>
 <section id="page-painel">
 <h2>Resumo de hoje</h2><div class="stats" id="stats"></div>
-<div class="panel"><h3>Pedidos recentes</h3><div id="recent"></div></div>
+<div class="panel" style="margin-bottom:12px"><h3>Fechamento do dia</h3><p class="muted">Encerra os pedidos de hoje sem alterar o status de cada um. Eles ficam guardados no histórico.</p><button class="primary" id="closeDayBtn" type="button">Fechar o dia</button><div id="closeDayMessage" class="muted" style="margin-top:8px"></div></div><div class="panel" style="margin-bottom:12px"><h3>Caixa diário — histórico</h3><div id="dailyClosings"></div></div><div class="panel"><h3>Pedidos recentes de hoje</h3><div id="recent"></div></div>
 </section>
 <section id="page-relatorio" class="hidden">
   <h2>Relatório mensal</h2>
@@ -95,30 +95,23 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 </div>
 </section>
 <section id="page-pedidos" class="hidden">
-<div class="toolbar"><select id="statusFilter"><option value="">Todos os status</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
+<div class="toolbar"><select id="orderDateFilter"><option value="today">Pedidos de hoje</option><option value="all">Todos os pedidos (histórico)</option></select><select id="statusFilter"><option value="">Todos os status</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
 <div id="orderForm" class="panel hidden">
 <h2>Novo pedido</h2>
-<div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div><div><label for="payment">Forma de pagamento</label><select id="payment"><option>Pix</option><option>Dinheiro</option><option>Cartão de débito</option><option>Cartão de crédito</option><option>Na entrega</option><option value="Cartão" hidden>Cartão (registro antigo)</option></select></div></div>
-  <div class="panel" style="margin-top:12px">
-  <h3>Pagamento dividido</h3>
-  <p>Preencha quanto o cliente pagou em cada forma.</p>
-
-  <label for="paidPix">Pix (R$)</label>
-  <input id="paidPix" type="number" min="0" step="0.01" value="0">
-
-  <label for="paidCash">Dinheiro (R$)</label>
-  <input id="paidCash" type="number" min="0" step="0.01" value="0">
-
-  <label for="paidCard">Cartão (R$)</label>
-  <input id="paidCard" type="number" min="0" step="0.01" value="0">
-
-  <p>Valor pago: <b id="paidTotal">R$ 0,00</b></p>
-  <p>Falta receber: <b id="remainingTotal">R$ 0,00</b></p>
-</div>
+<div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div></div>
+<div class="panel" style="margin:12px 0;background:#fffdf5"><h3>Como o cliente vai pagar?</h3><p class="muted">Pode dividir o pagamento. Preencha somente os valores usados; a soma precisa ser igual ao total do pedido.</p><div class="formrow"><div><label for="payPix">Pix (R$)</label><input id="payPix" type="number" min="0" step="0.01" value="0"></div><div><label for="payCash">Dinheiro (R$)</label><input id="payCash" type="number" min="0" step="0.01" value="0"></div><div><label for="payDebit">Cartão de débito (R$)</label><input id="payDebit" type="number" min="0" step="0.01" value="0"></div><div><label for="payCredit">Cartão de crédito (R$)</label><input id="payCredit" type="number" min="0" step="0.01" value="0"></div><div><label for="payOther">Outro / na entrega (R$)</label><input id="payOther" type="number" min="0" step="0.01" value="0"></div><div><label for="payOtherName">Qual outro meio?</label><input id="payOtherName" placeholder="Ex.: vale, transferência"></div></div><p><b>Distribuído: <span id="paymentAllocated">R$ 0,00</span></b></p></div>
 <label>Itens do pedido</label><div id="orderItems"></div><div class="actions"><button class="secondary" id="addItem">+ Adicionar item</button></div>
 
 <label for="deliveryFee">Taxa de entrega (R$)</label>
 <input id="deliveryFee" type="number" min="0" step="0.01" placeholder="Digite a taxa">
+<script>
+document.getElementById('deliveryFee').addEventListener('input', function () {
+  const valorEntregador = document.getElementById('courierPay');
+  if (valorEntregador) {
+    valorEntregador.value = this.value;
+  }
+});
+</script>
 <label for="courierName">Nome do entregador</label>
 <input id="courierName" type="text" placeholder="Digite o nome">
 
@@ -189,6 +182,7 @@ document.getElementById('saveBorderPrices').onclick = () => {
 
 db.products ||= [];
 db.orders ||= [];
+db.dailyClosings ||= [];
 db.borderPrices ||= {
   "Catupiry": 0,
   "Chocolate": 0,
@@ -199,10 +193,15 @@ db.borderPrices ||= {
 loadBorderPrices();
 function load(){try{return JSON.parse(localStorage.getItem(KEY))||{products:[],orders:[]}}catch(e){return {products:[],orders:[]}}}
 function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
+function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function todayKey(){return localDateKey(new Date())}
+function paymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
+function paymentLabel(o){if(!o.paymentBreakdown)return o.payment||'Não informado';const p=paymentParts(o),labels=[['pix','Pix'],['cash','Dinheiro'],['debit','Débito'],['credit','Crédito'],['other',o.paymentBreakdown.otherName||'Outro']];return labels.filter(([k])=>p[k]>0).map(([k,l])=>`${l}: ${brl(p[k])}`).join(' + ')||'Não informado'}
+function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entregue').reduce((sum,o)=>sum+paymentParts(o)[payment],0)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
-function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport()}
+function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport();renderDailyClosings();renderCloseDayState()}
 
 function renderStats() {
   const today = new Date().toDateString();
@@ -210,21 +209,12 @@ function renderStats() {
 
   const orders = db.orders.filter(o =>
     new Date(o.created).toDateString() === today &&
-    o.status !== 'Cancelado'
+    !o.closedAt && o.status !== 'Cancelado'
   );
   const entregues = orders.filter(o => o.status === 'Entregue');
 
-  const somar = pagamento => entregues
-    .filter(o => o.payment === pagamento)
-    .reduce((s, o) => s + Number(o.total || 0), 0);
-
-  const dinheiro = somar('Dinheiro');
-  const pix = somar('Pix');
-  const debitoBruto = somar('Cartão de débito');
-  const creditoBruto = somar('Cartão de crédito');
-  const outros = entregues
-    .filter(o => !['Dinheiro', 'Pix', 'Cartão de débito', 'Cartão de crédito'].includes(o.payment))
-    .reduce((s, o) => s + Number(o.total || 0), 0);
+  const somar = key => entregues.reduce((s,o)=>s+paymentParts(o)[key],0);
+  const dinheiro=somar('cash'), pix=somar('pix'), debitoBruto=somar('debit'), creditoBruto=somar('credit'), outros=somar('other');
 
   const taxaDebito = Math.max(0, Number(db.paymentFees.debit) || 0);
   const taxaCredito = Math.max(0, Number(db.paymentFees.credit) || 0);
@@ -236,7 +226,7 @@ function renderStats() {
   const totalLiquido = dinheiro + pix + debitoLiquido + creditoLiquido + outros;
 
   const pedidosAbertos = db.orders.filter(o =>
-    !['Entregue', 'Cancelado'].includes(o.status)
+    !o.closedAt && !['Entregue', 'Cancelado'].includes(o.status)
   ).length;
 
   const entregadores = {};
@@ -487,34 +477,10 @@ function calcTotal(){
   total += taxa;
 
   document.getElementById('orderTotal').textContent = brl(total);
-    const pix = Math.max(0, Number(document.getElementById('paidPix').value) || 0);
-  const dinheiro = Math.max(0, Number(document.getElementById('paidCash').value) || 0);
-  const cartao = Math.max(0, Number(document.getElementById('paidCard').value) || 0);
-
-  const pago = pix + dinheiro + cartao;
-
-  document.getElementById('paidTotal').textContent = brl(pago);
-  document.getElementById('remainingTotal').textContent = brl(Math.max(0, total - pago));
 }
 
 
-
-
-let valorEntregadorEditadoManualmente = false;
-
-document.getElementById('deliveryFee').addEventListener('input', function () {
-  const valorEntregador = document.getElementById('courierPay');
-
-  if (!valorEntregadorEditadoManualmente) {
-    valorEntregador.value = this.value;
-  }
-
-  calcTotal();
-});
-
-document.getElementById('courierPay').addEventListener('input', function () {
-  valorEntregadorEditadoManualmente = true;
-});
+document.getElementById('deliveryFee').addEventListener('input', calcTotal);
 
 document.getElementById('newOrder').onclick=()=>{
   editingOrderId=null;
@@ -523,15 +489,11 @@ document.getElementById('newOrder').onclick=()=>{
   document.getElementById('cname').value='';
   document.getElementById('cphone').value='';
   document.getElementById('caddress').value='';
-  document.getElementById('payment').value='Pix';
-  document.getElementById('paidPix').value = 0;
-document.getElementById('paidCash').value = 0;
-document.getElementById('paidCard').value = 0;
+  ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id).value=0);document.getElementById('payOtherName').value='';updatePaymentAllocated();
   document.getElementById('notes').value='';
   document.getElementById('deliveryFee').value='';
   document.getElementById('courierName').value='';
   document.getElementById('courierPay').value='';
-  valorEntregadorEditadoManualmente = false;
   document.getElementById('orderItems').innerHTML='';
   itemCounter=0;
   addOrderRow();
@@ -543,9 +505,6 @@ document.getElementById('cancelOrder').onclick=()=>{
   editingOrderId=null;
   document.getElementById('orderForm').classList.add('hidden');
 };
-['paidPix', 'paidCash', 'paidCard'].forEach(id => {
-  document.getElementById(id).addEventListener('input', calcTotal);
-});
 
 
 document.getElementById('saveOrder').onclick = () => {
@@ -568,11 +527,9 @@ document.getElementById('saveOrder').onclick = () => {
   const deliveryFee = Math.max(0, Number(document.getElementById('deliveryFee').value) || 0);
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const total = subtotal + deliveryFee;
-    const paidPix = Math.max(0, Number(document.getElementById('paidPix').value) || 0);
-  const paidCash = Math.max(0, Number(document.getElementById('paidCash').value) || 0);
-  const paidCard = Math.max(0, Number(document.getElementById('paidCard').value) || 0);
-  const amountPaid = paidPix + paidCash + paidCard;
-  const remaining = Math.max(0, total - amountPaid);
+  const paymentBreakdown={pix:Number(document.getElementById('payPix').value)||0,cash:Number(document.getElementById('payCash').value)||0,debit:Number(document.getElementById('payDebit').value)||0,credit:Number(document.getElementById('payCredit').value)||0,other:Number(document.getElementById('payOther').value)||0,otherName:document.getElementById('payOtherName').value.trim()};
+  const allocated=paymentBreakdown.pix+paymentBreakdown.cash+paymentBreakdown.debit+paymentBreakdown.credit+paymentBreakdown.other;
+  if(Math.abs(allocated-total)>0.009){alert(`A soma dos pagamentos (${brl(allocated)}) precisa ser igual ao total do pedido (${brl(total)}).`);return;}
   const existing = editingOrderId ? db.orders.find(o => o.id === editingOrderId) : null;
 
   const order = {
@@ -582,12 +539,7 @@ document.getElementById('saveOrder').onclick = () => {
     customer: document.getElementById('cname').value.trim() || 'Cliente',
     phone: document.getElementById('cphone').value.trim(),
     address: document.getElementById('caddress').value.trim(),
-    payment: document.getElementById('payment').value,
-        paidPix,
-    paidCash,
-    paidCard,
-    amountPaid,
-    remaining,
+    payment: 'Pagamento dividido', paymentBreakdown,
     notes: document.getElementById('notes').value.trim(),
     courierName: document.getElementById('courierName').value.trim(),
     courierPay: Math.max(0, Number(document.getElementById('courierPay').value) || 0),
@@ -628,7 +580,7 @@ function editOrder(id) {
   document.getElementById('cname').value = o.customer || '';
   document.getElementById('cphone').value = o.phone || '';
   document.getElementById('caddress').value = o.address || '';
-  document.getElementById('payment').value = o.payment || 'Pix';
+  const parts=paymentParts(o);document.getElementById('payPix').value=parts.pix;document.getElementById('payCash').value=parts.cash;document.getElementById('payDebit').value=parts.debit;document.getElementById('payCredit').value=parts.credit;document.getElementById('payOther').value=parts.other;document.getElementById('payOtherName').value=o.paymentBreakdown?.otherName||'';updatePaymentAllocated();
   document.getElementById('notes').value = o.notes || '';
   document.getElementById('deliveryFee').value = Number(o.deliveryFee || 0);
   document.getElementById('courierName').value = o.courierName || '';
@@ -647,11 +599,39 @@ function editOrder(id) {
 }
 window.editOrder = editOrder;
 
+// Abre uma versão simples do pedido para impressão pelo menu de impressão do aparelho.
+window.printOrder = function(id) {
+  const o = db.orders.find(order => order.id === id);
+  if (!o) { alert('Pedido não encontrado.'); return; }
+  const printWindow = window.open('', '_blank', 'width=420,height=700');
+  if (!printWindow) {
+    alert('O navegador bloqueou a janela de impressão. Permita pop-ups para este aplicativo e tente novamente.');
+    return;
+  }
+  const itemRows = (o.items || []).map(item => {
+    const unit = Number(item.price || 0) + Number(item.borderValue || 0);
+    const details = item.borderValue > 0 ? ` <small>(com borda: ${brl(item.borderValue)})</small>` : '';
+    return `<tr><td>${Number(item.qty || 0)}x ${esc(item.name)}${details}</td><td class="right">${brl(item.subtotal ?? unit * Number(item.qty || 0))}</td></tr>`;
+  }).join('');
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pedido #${esc(o.number)}</title>
+    <style>body{font:14px Arial,sans-serif;color:#000;width:72mm;max-width:100%;margin:0 auto;padding:4mm}h2,p{margin:5px 0}h2{text-align:center;font-size:19px}.center{text-align:center}.line{border-top:1px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse}td{padding:4px 0;vertical-align:top}.right{text-align:right;white-space:nowrap}.total{font-size:18px;font-weight:bold}small{font-size:11px}@media print{body{width:auto;margin:0;padding:2mm}@page{margin:3mm}}</style></head><body>
+    <h2>MASSA TOP</h2><p class="center">PEDIDO #${esc(o.number)}</p><p class="center">${esc(new Date(o.created).toLocaleString('pt-BR'))}</p><div class="line"></div>
+    <p><b>Cliente:</b> ${esc(o.customer || 'Cliente')}</p>${o.phone ? `<p><b>Telefone:</b> ${esc(o.phone)}</p>` : ''}${o.address ? `<p><b>Endereço:</b> ${esc(o.address)}</p>` : ''}<p><b>Status:</b> ${esc(o.status || 'Recebido')}</p><div class="line"></div>
+    <table>${itemRows}</table><div class="line"></div><p>Subtotal: <span style="float:right">${brl(o.subtotal ?? (o.total - (o.deliveryFee || 0)))}</span></p><p>Taxa de entrega: <span style="float:right">${brl(o.deliveryFee || 0)}</span></p><p class="total">TOTAL: <span style="float:right">${brl(o.total)}</span></p>
+    <div class="line"></div><p><b>Pagamento:</b> ${esc(paymentLabel(o))}</p>${o.courierName ? `<p><b>Entregador:</b> ${esc(o.courierName)}</p>` : ''}${o.courierPay ? `<p><b>Valor do entregador:</b> ${brl(o.courierPay)}</p>` : ''}${o.notes ? `<div class="line"></div><p><b>Observações:</b> ${esc(o.notes)}</p>` : ''}<div class="line"></div><p class="center">Obrigado pela preferência!</p>
+    <script>window.onload=function(){window.focus();window.print();};<\/script></body></html>`;
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+};
+
 function renderOrders() {
   let status = document.getElementById('statusFilter')?.value || '';
   let q = (document.getElementById('orderSearch')?.value || '').toLowerCase();
 
+  const dateMode = document.getElementById('orderDateFilter')?.value || 'today';
   let orders = db.orders.filter(o =>
+    (dateMode === 'all' || (localDateKey(o.created) === todayKey() && !o.closedAt)) &&
     (!status || o.status === status) &&
     (o.customer + ' ' + o.phone + ' ' + o.number).toLowerCase().includes(q)
   );
@@ -663,7 +643,7 @@ function renderOrders() {
           <div>
             <h3>Pedido #${o.number} · ${esc(o.customer)}</h3>
             <div class="muted">
-              ${new Date(o.created).toLocaleString('pt-BR')} · ${esc(o.payment)}
+              ${new Date(o.created).toLocaleString('pt-BR')} · ${esc(paymentLabel(o))} ${o.closedAt ? '· Dia fechado' : ''}
             </div>
           </div>
           <div class="price">${brl(o.total)}</div>
@@ -694,11 +674,11 @@ function renderOrders() {
         </div>
 
         <div class="actions">
+          <button type="button" class="secondary" data-print-order="${esc(o.id)}">Imprimir pedido</button>
           ${!['Entregue', 'Cancelado'].includes(o.status)
             ? `<button type="button" class="primary" data-edit-order="${esc(o.id)}">Editar pedido</button>`
             : ''}
           <button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button>
-          <button type="button" class="primary" data-print-order="${esc(o.id)}">🖨️ Imprimir pedido</button>
         </div>
       </div>
     `).join('')
@@ -707,81 +687,16 @@ function renderOrders() {
 
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
 window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
-
-window.printOrder = (id) => {
-  const o = db.orders.find(order => order.id === id);
-  if (!o) {
-    alert('Pedido não encontrado.');
-    return;
-  }
-
-  const receipt = window.open('', '_blank', 'width=400,height=700');
-  if (!receipt) {
-    alert('Permita abrir janelas pop-up para imprimir o pedido.');
-    return;
-  }
-
-  const items = o.items.map(i => `
-    <tr>
-      <td>${esc(i.qty + 'x ' + i.name)}</td>
-      <td style="text-align:right">${brl(i.subtotal ?? (i.price * i.qty))}</td>
-    </tr>
-  `).join('');
-
-  receipt.document.write(`
-    <!DOCTYPE html>
-    <html lang="pt-BR">
-    <head>
-      <meta charset="UTF-8">
-      <title>Pedido #${o.number}</title>
-      <style>
-        body { font-family: Arial, sans-serif; width: 280px; margin: 10px auto; font-size: 14px; }
-        h2, p { text-align: center; }
-        table { width: 100%; border-collapse: collapse; }
-        td { padding: 5px 0; vertical-align: top; }
-        .line { border-top: 1px dashed #000; margin: 10px 0; }
-        .total { font-size: 18px; font-weight: bold; }
-        @media print { button { display: none; } }
-      </style>
-    </head>
-    <body>
-      <h2>Massa Top</h2>
-      <p>Pedido #${o.number}<br>${new Date(o.created).toLocaleString('pt-BR')}</p>
-      <div class="line"></div>
-      <p style="text-align:left"><b>Cliente:</b> ${esc(o.customer)}<br>
-      <b>Telefone:</b> ${esc(o.phone || 'Não informado')}<br>
-      <b>Endereço:</b> ${esc(o.address || 'Não informado')}</p>
-      <div class="line"></div>
-      <table>${items}</table>
-      <div class="line"></div>
-      <p style="text-align:left">
-        Subtotal: ${brl(o.subtotal ?? o.total)}<br>
-        Taxa de entrega: ${brl(o.deliveryFee || 0)}
-      </p>
-      <p class="total">TOTAL: ${brl(o.total)}</p>
-      <p style="text-align:left">Pagamento: ${esc(o.payment || '')}<br>
-      Entregador: ${esc(o.courierName || 'Não informado')}<br>
-      Observações: ${esc(o.notes || 'Nenhuma')}</p>
-      <div class="line"></div>
-      <p>Obrigado pela preferência!</p>
-      <button onclick="window.print()">Imprimir</button>
-    </body>
-    </html>
-  `);
-
-  receipt.document.close();
-};
-
 // Botão Editar: usa delegação de eventos para continuar funcionando após a lista ser redesenhada.
 document.getElementById('orderList').addEventListener('click', function(event) {
+  const printButton = event.target.closest('[data-print-order]');
+  if (printButton) {
+    printOrder(printButton.getAttribute('data-print-order'));
+    return;
+  }
   const button = event.target.closest('[data-edit-order]');
   if (!button) return;
   editOrder(button.getAttribute('data-edit-order'));
-});
-document.getElementById('orderList').addEventListener('click', function(event) {
-  const button = event.target.closest('[data-print-order]');
-  if (!button) return;
-  printOrder(button.getAttribute('data-print-order'));
 });
 
 function currentMonthValue(){
@@ -802,8 +717,8 @@ function renderMonthlyReport(){
   const monthOrders = db.orders.filter(o => monthMatches(o.created, month));
   const delivered = monthOrders.filter(o => o.status === 'Entregue');
   const gross = delivered.reduce((sum,o) => sum + Number(o.total || 0), 0);
-  const debitGross = delivered.filter(o => o.payment === 'Cartão de débito').reduce((sum,o)=>sum+Number(o.total||0),0);
-  const creditGross = delivered.filter(o => o.payment === 'Cartão de crédito').reduce((sum,o)=>sum+Number(o.total||0),0);
+  const debitGross=delivered.reduce((sum,o)=>sum+paymentParts(o).debit,0);
+  const creditGross=delivered.reduce((sum,o)=>sum+paymentParts(o).credit,0);
   const debitRate = Math.max(0, Number(db.paymentFees?.debit ?? 1.5) || 0);
   const creditRate = Math.max(0, Number(db.paymentFees?.credit ?? 3.5) || 0);
   const cardFees = debitGross * debitRate / 100 + creditGross * creditRate / 100;
@@ -817,8 +732,8 @@ function renderMonthlyReport(){
   const payments = [
     ['Dinheiro', 'Dinheiro'], ['Pix', 'Pix'],
     ['Cartão de débito', 'Débito'], ['Cartão de crédito', 'Crédito']
-  ].map(([value,label])=>({label,total:delivered.filter(o=>o.payment===value).reduce((sum,o)=>sum+Number(o.total||0),0)}));
-  const otherPayments = delivered.filter(o=>!['Dinheiro','Pix','Cartão de débito','Cartão de crédito'].includes(o.payment)).reduce((sum,o)=>sum+Number(o.total||0),0);
+  ].map(([value,label])=>({label,total:delivered.reduce((sum,o)=>sum+paymentParts(o)[({'Dinheiro':'cash','Pix':'pix','Cartão de débito':'debit','Cartão de crédito':'credit'})[value]],0)}));
+  const otherPayments=delivered.reduce((sum,o)=>sum+paymentParts(o).other,0);
   document.getElementById('monthlyStats').innerHTML = `
     <div class="stat finance-total"><span>Faturamento bruto</span><strong>${brl(gross)}</strong><small>${delivered.length} pedido(s) entregues</small></div>
     <div class="stat finance"><span>Taxas dos cartões</span><strong>${brl(cardFees)}</strong><small>Débito ${brl(debitGross*debitRate/100)} · Crédito ${brl(creditGross*creditRate/100)}</small></div>
@@ -861,8 +776,47 @@ window.deleteExpense = id => {
   }
 };
 
-function renderRecent(){let list=db.orders.slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
+function renderRecent(){let list=db.orders.filter(o=>localDateKey(o.created)===todayKey()&&!o.closedAt).slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
 document.getElementById('exportData').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-meupedido-massatop.json';a.click();URL.revokeObjectURL(a.href)};
-document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;db.expenses ||= [];db.paymentFees ||= {debit:1.5,credit:3.5};save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
+document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;db.expenses ||= [];db.dailyClosings ||= [];db.paymentFees ||= {debit:1.5,credit:3.5};save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
+
+function renderDailyClosings(){
+  const el=document.getElementById('dailyClosings');
+  if(!el)return;
+  const rows=(db.dailyClosings||[]).slice().sort((a,b)=>b.date.localeCompare(a.date));
+  el.innerHTML=rows.length?`<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:8px">Data</th><th style="text-align:right;padding:8px">Pedidos</th><th style="text-align:right;padding:8px">Dinheiro</th><th style="text-align:right;padding:8px">Pix</th><th style="text-align:right;padding:8px">Débito</th><th style="text-align:right;padding:8px">Crédito</th><th style="text-align:right;padding:8px">Outros</th><th style="text-align:right;padding:8px">Total</th></tr></thead><tbody>${rows.map(r=>`<tr style="border-top:1px solid var(--line)"><td style="padding:8px">${r.date.split('-').reverse().join('/')}</td><td style="text-align:right;padding:8px">${Number(r.orders||0)}</td><td style="text-align:right;padding:8px">${brl(r.cash)}</td><td style="text-align:right;padding:8px">${brl(r.pix)}</td><td style="text-align:right;padding:8px">${brl(r.debit)}</td><td style="text-align:right;padding:8px">${brl(r.credit)}</td><td style="text-align:right;padding:8px">${brl(r.other)}</td><td style="text-align:right;padding:8px;font-weight:bold">${brl(Number(r.cash||0)+Number(r.pix||0)+Number(r.debit||0)+Number(r.credit||0)+Number(r.other||0))}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">Nenhum dia fechado ainda.</div>';
+}
+function renderCloseDayState(){
+  const btn=document.getElementById('closeDayBtn');
+  const msg=document.getElementById('closeDayMessage');
+  if(!btn||!msg)return;
+  const closed=(db.dailyClosings||[]).find(x=>x.date===todayKey());
+  btn.disabled=!!closed;
+  btn.textContent=closed?'Dia já fechado':'Fechar o dia';
+  msg.textContent=closed?`Fechamento salvo: ${Number(closed.orders||0)} pedidos. Os status foram mantidos.`:'';
+}
+document.getElementById('closeDayBtn')?.addEventListener('click',()=>{
+  const date=todayKey();
+  if((db.dailyClosings||[]).some(x=>x.date===date)){alert('Este dia já foi fechado.');return;}
+  const todays=db.orders.filter(o=>localDateKey(o.created)===date&&!o.closedAt);
+  if(!todays.length){alert('Não há pedidos de hoje para fechar.');return;}
+  if(!confirm(`Fechar o dia com ${todays.length} pedido(s)? Os pedidos sairão da lista de hoje, mas continuarão no histórico e manterão seus status atuais.`))return;
+  const cash=moneyForClose(todays,'cash');
+  const pix=moneyForClose(todays,'pix');
+  const debit=moneyForClose(todays,'debit');
+  const credit=moneyForClose(todays,'credit');
+  const other=moneyForClose(todays,'other');
+  const closedAt=new Date().toISOString();
+  todays.forEach(o=>{o.closedAt=closedAt;});
+  db.dailyClosings ||= [];
+  db.dailyClosings.push({date,closedAt,orders:todays.length,cash,pix,debit,credit,other});
+  save();
+  alert('Dia fechado! Os pedidos foram guardados no histórico sem mudar os status.');
+});
+document.getElementById('orderDateFilter')?.addEventListener('change',renderOrders);
+
+function updatePaymentAllocated(){const ids=['payPix','payCash','payDebit','payCredit','payOther'];const sum=ids.reduce((s,id)=>s+(Number(document.getElementById(id)?.value)||0),0);const out=document.getElementById('paymentAllocated');if(out)out.textContent=brl(sum);}
+['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id)?.addEventListener('input',updatePaymentAllocated));
+
 renderAll();
 </script></body></html>
