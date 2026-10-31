@@ -241,6 +241,17 @@ function renderStats() {
   const today = new Date().toDateString();
   db.paymentFees ||= { debit: 1.5, credit: 3.5 };
 
+  // Caixa inicial: zera automaticamente quando começa um novo dia.
+  if (db.cashOpeningDate !== todayKey()) {
+    db.cashOpening = { dinheiro: 0, pix: 0 };
+    db.cashOpeningDate = todayKey();
+    localStorage.setItem(KEY, JSON.stringify(db));
+  }
+  db.cashOpening ||= { dinheiro: 0, pix: 0 };
+  const caixaInicialDinheiro = Number(db.cashOpening.dinheiro || 0);
+  const caixaInicialPix = Number(db.cashOpening.pix || 0);
+  const caixaInicialTotal = caixaInicialDinheiro + caixaInicialPix;
+
   const orders = db.orders.filter(o =>
     new Date(o.created).toDateString() === today &&
     !o.closedAt && o.status !== 'Cancelado'
@@ -300,6 +311,24 @@ function renderStats() {
       <strong>${brl(vendasBrutas)}</strong>
     </div>
 
+    <h3 class="finance-title" style="grid-column:1/-1">Caixa inicial — início do expediente</h3>
+    <div class="stat finance">
+      <label for="caixaInicialDinheiro">Dinheiro que já tem no caixa (R$)</label>
+      <input id="caixaInicialDinheiro" type="number" min="0" step="0.01" value="${caixaInicialDinheiro}" oninput="atualizarTotalCaixaInicial()" placeholder="0,00">
+    </div>
+    <div class="stat finance">
+      <label for="caixaInicialPix">Pix que já tem na conta (R$)</label>
+      <input id="caixaInicialPix" type="number" min="0" step="0.01" value="${caixaInicialPix}" oninput="atualizarTotalCaixaInicial()" placeholder="0,00">
+    </div>
+    <div class="stat finance-total">
+      <span>Total do caixa inicial</span>
+      <strong id="caixaInicialTotal">${brl(caixaInicialTotal)}</strong>
+      <div class="actions">
+        <button type="button" class="primary" onclick="salvarCaixaInicial()">Salvar caixa inicial</button>
+        <button type="button" class="secondary" onclick="apagarCaixaInicial()">Zerar valores</button>
+      </div>
+    </div>
+
     <h3 class="finance-title" style="grid-column:1/-1">Caixa recebido hoje</h3>
     <div class="stat finance">
       <span>Dinheiro recebido</span>
@@ -353,6 +382,35 @@ function renderStats() {
     ${resumoEntregadores}
   `;
 }
+
+window.atualizarTotalCaixaInicial = function() {
+  const dinheiro = Number(document.getElementById('caixaInicialDinheiro')?.value || 0);
+  const pix = Number(document.getElementById('caixaInicialPix')?.value || 0);
+  const total = document.getElementById('caixaInicialTotal');
+  if (total) total.textContent = brl(dinheiro + pix);
+};
+
+window.salvarCaixaInicial = function() {
+  const dinheiroInput = document.getElementById('caixaInicialDinheiro');
+  const pixInput = document.getElementById('caixaInicialPix');
+  const dinheiro = Number(dinheiroInput?.value);
+  const pix = Number(pixInput?.value);
+  if (!dinheiroInput || !pixInput || dinheiroInput.value.trim() === '' || pixInput.value.trim() === '' || !Number.isFinite(dinheiro) || !Number.isFinite(pix) || dinheiro < 0 || pix < 0) {
+    alert('Informe valores válidos, iguais ou maiores que zero.');
+    return;
+  }
+  db.cashOpening = { dinheiro, pix };
+  db.cashOpeningDate = todayKey();
+  save();
+  alert('Caixa inicial salvo!');
+};
+
+window.apagarCaixaInicial = function() {
+  if (!confirm('Zerar o dinheiro e o Pix do caixa inicial de hoje?')) return;
+  db.cashOpening = { dinheiro: 0, pix: 0 };
+  db.cashOpeningDate = todayKey();
+  save();
+};
 
 window.savePaymentFees = function() {
   const debitInput = document.getElementById('feeDebit');
