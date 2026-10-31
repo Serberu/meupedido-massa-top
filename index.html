@@ -445,17 +445,15 @@ window.toggleP=id=>{let p=db.products.find(x=>x.id===id);if(p){p.available=!p.av
 window.deleteP=id=>{if(confirm('Excluir este produto? Pedidos já registrados serão mantidos.')){db.products=db.products.filter(p=>p.id!==id);save()}};
 
 
-function addOrderRow(productId='',qty=1,borderValue=''){
+function addOrderRow(productId='',qty=1,borderValue='',halfProductId=''){
   let id=++itemCounter;
 
   const produtosDisponiveis = db.products.filter(
-    p => p.available || p.id === productId
+    p => p.available || p.id === productId || p.id === halfProductId
   );
-
   const categorias = [...new Set(
     produtosDisponiveis.map(p => p.category || 'Sem categoria')
   )];
-
   const produtoAtual = db.products.find(p => p.id === productId);
   const categoriaInicial = produtoAtual
     ? (produtoAtual.category || 'Sem categoria')
@@ -464,111 +462,114 @@ function addOrderRow(productId='',qty=1,borderValue=''){
   let row=document.createElement('div');
   row.className='formrow orderrow item';
   row.dataset.row=id;
-
   row.innerHTML=`
     <div>
       <label>Categoria</label>
       <select class="oi-category">
         <option value="">Escolher categoria</option>
-        ${categorias.map(c => `
-          <option value="${esc(c)}" ${c===categoriaInicial?'selected':''}>
-            ${esc(c)}
-          </option>
-        `).join('')}
+        ${categorias.map(c => `<option value="${esc(c)}" ${c===categoriaInicial?'selected':''}>${esc(c)}</option>`).join('')}
       </select>
     </div>
     <div>
-      <label>Produto</label>
-      <select class="oi-product">
-        <option value="">Escolher produto</option>
-      </select>
+      <label>Produto / primeiro sabor</label>
+      <select class="oi-product"><option value="">Escolher produto</option></select>
+      <div class="oi-half-wrap hidden" style="margin-top:8px">
+        <label style="font-weight:400"><input class="oi-half-check" type="checkbox" style="width:auto;margin-right:6px"> Pizza meio a meio</label>
+        <div class="oi-half-select-wrap hidden">
+          <label>Segundo sabor</label>
+          <select class="oi-half-product"><option value="">Escolher segundo sabor</option></select>
+          <small class="muted">Será cobrado o preço do sabor mais caro.</small>
+        </div>
+      </div>
     </div>
-    <div>
-      <label>Quantidade</label>
-      <input class="oi-qty" type="number" min="1" step="1" value="${qty}">
-    </div>
-    <div>
-      <label>Valor da borda (R$)</label>
-      <input class="oi-border" type="number" min="0" step="0.01" value="${Number(borderValue) > 0 ? borderValue : ''}" placeholder="Valor da borda">
-    </div>
-    <div>
-      <label>Subtotal</label>
-      <input class="oi-sub" value="${brl(0)}" readonly>
-    </div>
-    <div class="right" style="align-items:end">
-      <button type="button" class="danger oi-remove">Remover item</button>
-    </div>`;
+    <div><label>Quantidade</label><input class="oi-qty" type="number" min="1" step="1" value="${qty}"></div>
+    <div><label>Valor da borda (R$)</label><input class="oi-border" type="number" min="0" step="0.01" value="${Number(borderValue)>0?borderValue:''}" placeholder="Valor da borda"></div>
+    <div><label>Subtotal</label><input class="oi-sub" value="${brl(0)}" readonly></div>
+    <div class="right" style="align-items:end"><button type="button" class="danger oi-remove">Remover item</button></div>`;
 
   document.getElementById('orderItems').appendChild(row);
+  const categorySelect=row.querySelector('.oi-category');
+  const productSelect=row.querySelector('.oi-product');
+  const halfWrap=row.querySelector('.oi-half-wrap');
+  const halfCheck=row.querySelector('.oi-half-check');
+  const halfSelectWrap=row.querySelector('.oi-half-select-wrap');
+  const halfSelect=row.querySelector('.oi-half-product');
 
-  const categorySelect = row.querySelector('.oi-category');
-  const productSelect = row.querySelector('.oi-product');
+  function atualizarSegundoSabor(){
+    const firstId=productSelect.value;
+    const first=db.products.find(p=>p.id===firstId);
+    const lista=produtosDisponiveis.filter(p =>
+      (p.category || 'Sem categoria') === categorySelect.value && p.id!==firstId
+    );
+    halfSelect.innerHTML='<option value="">Escolher segundo sabor</option>'+lista.map(p=>
+      `<option value="${p.id}" ${p.id===halfProductId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`
+    ).join('');
+    if(halfProductId && lista.some(p=>p.id===halfProductId)) halfSelect.value=halfProductId;
+    else if(halfCheck.checked && lista.length) halfSelect.value=lista[0].id;
+    if(!first || !String(first.category||'').toLowerCase().includes('pizza')){
+      halfWrap.classList.add('hidden');
+      halfCheck.checked=false;
+      halfSelectWrap.classList.add('hidden');
+      halfSelect.value='';
+    }else{
+      halfWrap.classList.remove('hidden');
+      halfSelectWrap.classList.toggle('hidden',!halfCheck.checked);
+    }
+  }
 
   function atualizarProdutos(){
-    const categoria = categorySelect.value;
-    const lista = produtosDisponiveis.filter(p =>
-      (p.category || 'Sem categoria') === categoria
-    );
-
-    productSelect.innerHTML =
-      '<option value="">Escolher produto</option>' +
-      lista.map(p => `
-        <option value="${p.id}" ${p.id===productId?'selected':''}>
-          ${esc(p.name)} — ${brl(p.price)}
-        </option>
-      `).join('');
-
+    const lista=produtosDisponiveis.filter(p => (p.category||'Sem categoria')===categorySelect.value);
+    productSelect.innerHTML='<option value="">Escolher produto</option>'+lista.map(p=>
+      `<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`
+    ).join('');
+    if(productId && lista.some(p=>p.id===productId)) productSelect.value=productId;
+    atualizarSegundoSabor();
     calcTotal();
   }
 
-  categorySelect.addEventListener('change', atualizarProdutos);
-  productSelect.addEventListener('change', calcTotal);
-
-  row.querySelectorAll('.oi-qty, .oi-border').forEach(e =>
-    e.addEventListener('input', calcTotal)
-  );
-
-  row.querySelector('.oi-remove').onclick=()=>{
-    row.remove();
+  categorySelect.addEventListener('change',()=>{
+    productId=''; halfProductId='';
+    atualizarProdutos();
+  });
+  productSelect.addEventListener('change',()=>{
+    halfProductId='';
+    if(!productSelect.value) halfCheck.checked=false;
+    atualizarSegundoSabor();
     calcTotal();
-  };
-
+  });
+  halfCheck.addEventListener('change',()=>{
+    halfSelectWrap.classList.toggle('hidden',!halfCheck.checked);
+    if(halfCheck.checked && !halfSelect.value){
+      const firstOther=halfSelect.options[1];
+      if(firstOther) halfSelect.value=firstOther.value;
+    }
+    calcTotal();
+  });
+  halfSelect.addEventListener('change',calcTotal);
+  row.querySelectorAll('.oi-qty,.oi-border').forEach(e=>e.addEventListener('input',calcTotal));
+  row.querySelector('.oi-remove').onclick=()=>{row.remove();calcTotal()};
   atualizarProdutos();
+  if(halfProductId){
+    halfCheck.checked=true;
+    atualizarSegundoSabor();
+  }
 }
 
-
 function calcTotal(){
-  let total = 0;
-
-  document.querySelectorAll('.orderrow').forEach(r => {
-    let p = db.products.find(
-      p => p.id === r.querySelector('.oi-product').value
-    );
-
-    let q = Math.max(
-      0,
-      Number(r.querySelector('.oi-qty').value) || 0
-    );
-
-    let valorBorda = Math.max(
-      0,
-      Number(r.querySelector('.oi-border')?.value) || 0
-    );
-
-    let sub = p ? (p.price + valorBorda) * q : 0;
-
-    r.querySelector('.oi-sub').value = brl(sub);
-    total += sub;
+  let total=0;
+  document.querySelectorAll('.orderrow').forEach(r=>{
+    const p=db.products.find(p=>p.id===r.querySelector('.oi-product').value);
+    const halfId=r.querySelector('.oi-half-check')?.checked?r.querySelector('.oi-half-product')?.value:'';
+    const halfP=halfId?db.products.find(p=>p.id===halfId):null;
+    const q=Math.max(0,Number(r.querySelector('.oi-qty').value)||0);
+    const valorBorda=Math.max(0,Number(r.querySelector('.oi-border')?.value)||0);
+    const unitPrice=p?(halfP?Math.max(Number(p.price)||0,Number(halfP.price)||0):(Number(p.price)||0)):0;
+    const sub=(unitPrice+valorBorda)*q;
+    r.querySelector('.oi-sub').value=brl(sub);
+    total+=sub;
   });
-
-  const taxa = Math.max(
-    0,
-    Number(document.getElementById('deliveryFee').value) || 0
-  );
-
-  total += taxa;
-
-  document.getElementById('orderTotal').textContent = brl(total);
+  const taxa=Math.max(0,Number(document.getElementById('deliveryFee').value)||0);
+  document.getElementById('orderTotal').textContent=brl(total+taxa);
 }
 
 
@@ -604,16 +605,28 @@ document.getElementById('cancelOrder').onclick=()=>{
 
 document.getElementById('saveOrder').onclick = () => {
   const rows = [...document.querySelectorAll('.orderrow')];
+  let meioAMeioIncompleto = false;
   const items = rows.map(r => {
     const p = db.products.find(p => p.id === r.querySelector('.oi-product').value);
+    const halfId = r.querySelector('.oi-half-check')?.checked ? r.querySelector('.oi-half-product')?.value : '';
+    const halfP = halfId ? db.products.find(p => p.id === halfId) : null;
     const qty = Math.floor(Number(r.querySelector('.oi-qty').value) || 0);
     const borderValue = Math.max(0, Number(r.querySelector('.oi-border')?.value) || 0);
     if (!p || qty <= 0) return null;
-    const unitPrice = Number(p.price) || 0;
+    if (r.querySelector('.oi-half-check')?.checked && !halfP) {
+      meioAMeioIncompleto = true;
+      return null;
+    }
+    const unitPrice = halfP ? Math.max(Number(p.price)||0, Number(halfP.price)||0) : (Number(p.price) || 0);
+    const name = halfP ? `1/2 ${p.name} + 1/2 ${halfP.name}` : p.name;
     const subtotal = (unitPrice + borderValue) * qty;
-    return { productId:p.id, name:p.name, price:unitPrice, qty, borderValue, subtotal };
+    return { productId:p.id, halfProductId:halfP?.id || '', halfName:halfP?.name || '', name, price:unitPrice, qty, borderValue, subtotal };
   }).filter(Boolean);
 
+  if (meioAMeioIncompleto) {
+    alert('Escolha o segundo sabor da pizza meio a meio.');
+    return;
+  }
   if (!items.length) {
     alert('Escolha pelo menos um produto e uma quantidade.');
     return;
@@ -704,7 +717,7 @@ function editOrder(id) {
   itemCounter = 0;
 
   (o.items || []).forEach(item => {
-    addOrderRow(item.productId || '', item.qty || 1, item.borderValue ?? '');
+    addOrderRow(item.productId || '', item.qty || 1, item.borderValue ?? '', item.halfProductId || '');
   });
   if (!(o.items || []).length) addOrderRow();
 
