@@ -17,6 +17,7 @@ main{max-width:1000px;margin:0 auto;padding:16px}.stats{display:grid;grid-templa
 .stat small{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.4}
 .finance-title{margin:20px 0 10px;padding-left:10px;border-left:5px solid var(--red)}
 #stats input{margin-top:8px}
+.cash-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.cash-actions button{flex:1;min-width:120px}.cash-note{font-size:12px;color:var(--muted);margin-top:6px}.half-box{grid-column:1/-1;background:#fffdf5;border:1px dashed #e0b84f;border-radius:8px;padding:10px}.half-box label{margin-top:0}
 
 h2{font-size:20px;margin:4px 0 14px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.toolbar input,.toolbar select{flex:1;min-width:150px}
 input,select,textarea{width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font:inherit;background:white}label{display:block;font-size:13px;font-weight:700;margin:10px 0 5px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.item{margin-bottom:10px}.itemtop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.item h3{font-size:16px;margin:0 0 5px}.muted{color:var(--muted);font-size:13px}.price{font-weight:800;font-size:17px;white-space:nowrap}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.actions button{padding:8px 10px;font-size:12px}.status{display:inline-block;background:#fff3cd;border-radius:20px;padding:5px 9px;font-size:12px;font-weight:700}
@@ -176,6 +177,14 @@ db.paymentFees ||= {
   debit: 1.5,
   credit: 3.5
 };
+
+db.cashOpening ||= { date: todayKey(), dinheiro: 0, pix: 0 };
+db.cashWithdrawals ||= [];
+if (db.cashOpening.date !== todayKey()) {
+  db.cashOpening = { date: todayKey(), dinheiro: 0, pix: 0 };
+  db.cashWithdrawals = (db.cashWithdrawals || []).filter(x => x.date === todayKey());
+  localStorage.setItem(KEY, JSON.stringify(db));
+}
   const borderFields = {
   Catupiry: 'borderCatupiry',
   Chocolate: 'borderChocolate',
@@ -240,27 +249,23 @@ function renderAll(){renderStats();renderProducts();renderOrders();renderRecent(
 function renderStats() {
   const today = new Date().toDateString();
   db.paymentFees ||= { debit: 1.5, credit: 3.5 };
-
-  // Caixa inicial: zera automaticamente quando começa um novo dia.
-  if (db.cashOpeningDate !== todayKey()) {
-    db.cashOpening = { dinheiro: 0, pix: 0 };
-    db.cashOpeningDate = todayKey();
+  db.cashOpening ||= { date: todayKey(), dinheiro: 0, pix: 0 };
+  db.cashWithdrawals ||= [];
+  if (db.cashOpening.date !== todayKey()) {
+    db.cashOpening = { date: todayKey(), dinheiro: 0, pix: 0 };
+    db.cashWithdrawals = db.cashWithdrawals.filter(x => x.date === todayKey());
     localStorage.setItem(KEY, JSON.stringify(db));
   }
-  db.cashOpening ||= { dinheiro: 0, pix: 0 };
-  const caixaInicialDinheiro = Number(db.cashOpening.dinheiro || 0);
-  const caixaInicialPix = Number(db.cashOpening.pix || 0);
-  const caixaInicialTotal = caixaInicialDinheiro + caixaInicialPix;
 
   const orders = db.orders.filter(o =>
     new Date(o.created).toDateString() === today &&
     !o.closedAt && o.status !== 'Cancelado'
   );
   const entregues = orders.filter(o => o.status === 'Entregue');
+  const entreguesHoje = db.orders.filter(o => new Date(o.created).toDateString() === today && o.status === 'Entregue');
 
   const somar = key => entregues.reduce((s,o)=>s+paymentParts(o)[key],0);
   const dinheiro=somar('cash'), pix=somar('pix'), debitoBruto=somar('debit'), creditoBruto=somar('credit'), outros=somar('other');
-
   const taxaDebito = Math.max(0, Number(db.paymentFees.debit) || 0);
   const taxaCredito = Math.max(0, Number(db.paymentFees.credit) || 0);
   const descontoDebito = debitoBruto * taxaDebito / 100;
@@ -269,148 +274,74 @@ function renderStats() {
   const creditoLiquido = creditoBruto - descontoCredito;
   const vendasBrutas = entregues.reduce((s, o) => s + Number(o.total || 0), 0);
   const totalLiquido = dinheiro + pix + debitoLiquido + creditoLiquido + outros;
+  const pedidosAbertos = db.orders.filter(o => !o.closedAt && !['Entregue', 'Cancelado'].includes(o.status)).length;
 
-  const pedidosAbertos = db.orders.filter(o =>
-    !o.closedAt && !['Entregue', 'Cancelado'].includes(o.status)
-  ).length;
+  const retiradasHoje = db.cashWithdrawals.filter(x => x.date === todayKey());
+  const retiradoDinheiro = retiradasHoje.filter(x => x.type === 'Dinheiro').reduce((s,x)=>s+Number(x.amount||0),0);
+  const retiradoPix = retiradasHoje.filter(x => x.type === 'Pix').reduce((s,x)=>s+Number(x.amount||0),0);
+  const fundoDinheiro = Number(db.cashOpening.dinheiro||0);
+  const fundoPix = Number(db.cashOpening.pix||0);
+  const saldoDinheiro = fundoDinheiro + entreguesHoje.reduce((s,o)=>s+paymentParts(o).cash,0) - retiradoDinheiro;
+  const saldoPix = fundoPix + entreguesHoje.reduce((s,o)=>s+paymentParts(o).pix,0) - retiradoPix;
 
   const entregadores = {};
-  entregues.forEach(o => {
-    const nome = (o.courierName || '').trim();
-    const valor = Number(o.courierPay || 0);
-    if (!nome || valor <= 0) return;
-    if (!entregadores[nome]) entregadores[nome] = { pedidos: 0, total: 0 };
-    entregadores[nome].pedidos++;
-    entregadores[nome].total += valor;
-  });
-
-  const resumoEntregadores = Object.entries(entregadores)
-    .map(([nome, dados]) => `
-      <div class="stat">
-        <span>${esc(nome)} — ${dados.pedidos} entregas</span>
-        <strong>${brl(dados.total)}</strong>
-      </div>
-    `).join('');
+  entregues.forEach(o => { const nome=(o.courierName||'').trim(), valor=Number(o.courierPay||0); if(!nome||valor<=0)return; if(!entregadores[nome])entregadores[nome]={pedidos:0,total:0}; entregadores[nome].pedidos++; entregadores[nome].total+=valor; });
+  const resumoEntregadores = Object.entries(entregadores).map(([nome,dados])=>`<div class="stat"><span>${esc(nome)} — ${dados.pedidos} entregas</span><strong>${brl(dados.total)}</strong></div>`).join('');
 
   document.getElementById('stats').innerHTML = `
     <h3 class="finance-title" style="grid-column:1/-1">Resumo do dia</h3>
-    <div class="stat">
-      <span>Produtos cadastrados</span>
-      <strong>${db.products.length}</strong>
-    </div>
-    <div class="stat">
-      <span>Pedidos de hoje</span>
-      <strong>${orders.length}</strong>
-    </div>
-    <div class="stat">
-      <span>Pedidos em aberto</span>
-      <strong>${pedidosAbertos}</strong>
-    </div>
-    <div class="stat">
-      <span>Vendas entregues (valor bruto)</span>
-      <strong>${brl(vendasBrutas)}</strong>
-    </div>
+    <div class="stat"><span>Produtos cadastrados</span><strong>${db.products.length}</strong></div>
+    <div class="stat"><span>Pedidos de hoje</span><strong>${orders.length}</strong></div>
+    <div class="stat"><span>Pedidos em aberto</span><strong>${pedidosAbertos}</strong></div>
+    <div class="stat"><span>Vendas entregues (valor bruto)</span><strong>${brl(vendasBrutas)}</strong></div>
 
-    <h3 class="finance-title" style="grid-column:1/-1">Caixa inicial — início do expediente</h3>
-    <div class="stat finance">
-      <label for="caixaInicialDinheiro">Dinheiro que já tem no caixa (R$)</label>
-      <input id="caixaInicialDinheiro" type="number" min="0" step="0.01" value="${caixaInicialDinheiro}" oninput="atualizarTotalCaixaInicial()" placeholder="0,00">
-    </div>
-    <div class="stat finance">
-      <label for="caixaInicialPix">Pix que já tem na conta (R$)</label>
-      <input id="caixaInicialPix" type="number" min="0" step="0.01" value="${caixaInicialPix}" oninput="atualizarTotalCaixaInicial()" placeholder="0,00">
-    </div>
-    <div class="stat finance-total">
-      <span>Total do caixa inicial</span>
-      <strong id="caixaInicialTotal">${brl(caixaInicialTotal)}</strong>
-      <div class="actions">
-        <button type="button" class="primary" onclick="salvarCaixaInicial()">Salvar caixa inicial</button>
-        <button type="button" class="secondary" onclick="apagarCaixaInicial()">Zerar valores</button>
-      </div>
-    </div>
+    <h3 class="finance-title" style="grid-column:1/-1">Fundo inicial do caixa</h3>
+    <div class="stat"><label for="openingCash">Dinheiro que já tinha</label><input id="openingCash" type="number" min="0" step="0.01" value="${fundoDinheiro.toFixed(2)}"></div>
+    <div class="stat"><label for="openingPix">Pix que já tinha</label><input id="openingPix" type="number" min="0" step="0.01" value="${fundoPix.toFixed(2)}"></div>
+    <div class="stat"><span>Total do fundo inicial</span><strong>${brl(fundoDinheiro+fundoPix)}</strong><div class="cash-actions"><button class="primary" type="button" id="saveOpeningCash">Salvar fundo</button></div></div>
 
-    <h3 class="finance-title" style="grid-column:1/-1">Caixa recebido hoje</h3>
-    <div class="stat finance">
-      <span>Dinheiro recebido</span>
-      <strong>${brl(dinheiro)}</strong>
-    </div>
-    <div class="stat finance">
-      <span>Pix recebido</span>
-      <strong>${brl(pix)}</strong>
-    </div>
-    <div class="stat finance">
-      <span>Cartão de débito — líquido</span>
-      <strong>${brl(debitoLiquido)}</strong>
-      <small>Bruto: ${brl(debitoBruto)} · Taxa (${taxaDebito}%): ${brl(descontoDebito)}</small>
-    </div>
-    <div class="stat finance">
-      <span>Cartão de crédito — líquido</span>
-      <strong>${brl(creditoLiquido)}</strong>
-      <small>Bruto: ${brl(creditoBruto)} · Taxa (${taxaCredito}%): ${brl(descontoCredito)}</small>
-    </div>
-    <div class="stat finance-total">
-      <span>Total líquido calculado</span>
-      <strong>${brl(totalLiquido)}</strong>
-      <small>Inclui os outros meios de pagamento registrados; taxas descontadas de débito e crédito</small>
-    </div>
-    ${outros > 0 ? `
-      <div class="stat">
-        <span>Outros pagamentos — conferir</span>
-        <strong>${brl(outros)}</strong>
-        <small>Inclui "Na entrega" e pedidos antigos marcados apenas como "Cartão". Não incluídos no total líquido.</small>
-      </div>
-    ` : ''}
+    <h3 class="finance-title" style="grid-column:1/-1">Retirada do caixa</h3>
+    <div class="stat"><label for="withdrawType">Retirar de</label><select id="withdrawType"><option>Dinheiro</option><option>Pix</option></select></div>
+    <div class="stat"><label for="withdrawAmount">Valor da retirada (R$)</label><input id="withdrawAmount" type="number" min="0.01" step="0.01" placeholder="0,00"></div>
+    <div class="stat"><label for="withdrawReason">Motivo (opcional)</label><input id="withdrawReason" placeholder="Ex.: troco, pagamento"></div>
+    <div class="stat"><span>Registrar retirada</span><div class="cash-actions"><button class="primary" type="button" id="saveWithdrawal">Retirar valor</button></div></div>
+    <div class="stat"><span>Retiradas de hoje</span><strong>${brl(retiradoDinheiro+retiradoPix)}</strong><small>Dinheiro: ${brl(retiradoDinheiro)} · Pix: ${brl(retiradoPix)}</small></div>
+    <div class="stat"><span>Saldo disponível em dinheiro</span><strong>${brl(saldoDinheiro)}</strong><small>Fundo + vendas recebidas − retiradas</small></div>
+    <div class="stat"><span>Saldo disponível em Pix</span><strong>${brl(saldoPix)}</strong><small>Fundo + vendas recebidas − retiradas</small></div>
+    <div class="stat finance-total"><span>Total disponível no caixa</span><strong>${brl(saldoDinheiro+saldoPix)}</strong><small>Dinheiro + Pix. Separado do faturamento.</small></div>
+    <div class="stat" style="grid-column:1/-1"><span>Histórico de retiradas de hoje</span>${retiradasHoje.length ? retiradasHoje.slice().reverse().map(x=>`<div class="cash-actions" style="justify-content:space-between;border-top:1px solid var(--line);padding-top:7px"><span>${esc(x.type)} · ${brl(x.amount)} ${x.reason?'· '+esc(x.reason):''}</span><button type="button" class="danger" onclick="deleteWithdrawal('${esc(x.id)}')">Excluir</button></div>`).join('') : '<small>Nenhuma retirada registrada hoje.</small>'}</div>
 
+    <h3 class="finance-title" style="grid-column:1/-1">Caixa recebido hoje — vendas</h3>
+    <div class="stat finance"><span>Dinheiro recebido em vendas</span><strong>${brl(dinheiro)}</strong></div>
+    <div class="stat finance"><span>Pix recebido em vendas</span><strong>${brl(pix)}</strong></div>
+    <div class="stat finance"><span>Cartão de débito — líquido</span><strong>${brl(debitoLiquido)}</strong><small>Bruto: ${brl(debitoBruto)} · Taxa (${taxaDebito}%): ${brl(descontoDebito)}</small></div>
+    <div class="stat finance"><span>Cartão de crédito — líquido</span><strong>${brl(creditoLiquido)}</strong><small>Bruto: ${brl(creditoBruto)} · Taxa (${taxaCredito}%): ${brl(descontoCredito)}</small></div>
+    <div class="stat finance-total"><span>Total líquido das vendas</span><strong>${brl(totalLiquido)}</strong><small>Não inclui fundo inicial nem retiradas.</small></div>
+    ${outros > 0 ? `<div class="stat"><span>Outros pagamentos — conferir</span><strong>${brl(outros)}</strong></div>` : ''}
     <h3 class="finance-title" style="grid-column:1/-1">Configurar taxas da maquininha</h3>
-    <div class="stat">
-      <label for="feeDebit">Taxa do débito (%)</label>
-      <input id="feeDebit" type="number" min="0" max="100" step="0.1" value="${taxaDebito}">
-    </div>
-    <div class="stat">
-      <label for="feeCredit">Taxa do crédito (%)</label>
-      <input id="feeCredit" type="number" min="0" max="100" step="0.1" value="${taxaCredito}">
-    </div>
-    <div class="stat" style="display:flex;align-items:center">
-      <button type="button" class="primary" onclick="savePaymentFees()">Salvar taxas</button>
-    </div>
-
+    <div class="stat"><label for="feeDebit">Taxa do débito (%)</label><input id="feeDebit" type="number" min="0" max="100" step="0.1" value="${taxaDebito}"></div>
+    <div class="stat"><label for="feeCredit">Taxa do crédito (%)</label><input id="feeCredit" type="number" min="0" max="100" step="0.1" value="${taxaCredito}"></div>
+    <div class="stat" style="display:flex;align-items:center"><button type="button" class="primary" onclick="savePaymentFees()">Salvar taxas</button></div>
     <h3 class="finance-title" style="grid-column:1/-1">Entregadores</h3>
-    <div class="stat">
-      <span>Total devido aos entregadores</span>
-      <strong>${brl(Object.values(entregadores).reduce((s, e) => s + e.total, 0))}</strong>
-    </div>
+    <div class="stat"><span>Total devido aos entregadores</span><strong>${brl(Object.values(entregadores).reduce((s,e)=>s+e.total,0))}</strong></div>
     ${resumoEntregadores}
   `;
+
+  document.getElementById('saveOpeningCash').onclick = () => {
+    const cashRaw=document.getElementById('openingCash').value, pixRaw=document.getElementById('openingPix').value;
+    const cash=Number(cashRaw), pixValue=Number(pixRaw);
+    if(cashRaw.trim()===''||pixRaw.trim()===''||!Number.isFinite(cash)||!Number.isFinite(pixValue)||cash<0||pixValue<0){alert('Informe valores válidos para dinheiro e Pix.');return;}
+    db.cashOpening={date:todayKey(),dinheiro:cash,pix:pixValue}; save(); alert('Fundo inicial salvo!');
+  };
+  document.getElementById('saveWithdrawal').onclick = () => {
+    const type=document.getElementById('withdrawType').value, raw=document.getElementById('withdrawAmount').value, amount=Number(raw), reason=document.getElementById('withdrawReason').value.trim();
+    if(raw.trim()===''||!Number.isFinite(amount)||amount<=0){alert('Informe um valor maior que zero.');return;}
+    const available=type==='Dinheiro'?saldoDinheiro:saldoPix;
+    if(amount>available+0.001){alert(`A retirada é maior que o saldo disponível de ${type}: ${brl(available)}.`);return;}
+    db.cashWithdrawals.push({id:uid(),date:todayKey(),type,amount,reason}); save(); alert('Retirada registrada!');
+  };
 }
-
-window.atualizarTotalCaixaInicial = function() {
-  const dinheiro = Number(document.getElementById('caixaInicialDinheiro')?.value || 0);
-  const pix = Number(document.getElementById('caixaInicialPix')?.value || 0);
-  const total = document.getElementById('caixaInicialTotal');
-  if (total) total.textContent = brl(dinheiro + pix);
-};
-
-window.salvarCaixaInicial = function() {
-  const dinheiroInput = document.getElementById('caixaInicialDinheiro');
-  const pixInput = document.getElementById('caixaInicialPix');
-  const dinheiro = Number(dinheiroInput?.value);
-  const pix = Number(pixInput?.value);
-  if (!dinheiroInput || !pixInput || dinheiroInput.value.trim() === '' || pixInput.value.trim() === '' || !Number.isFinite(dinheiro) || !Number.isFinite(pix) || dinheiro < 0 || pix < 0) {
-    alert('Informe valores válidos, iguais ou maiores que zero.');
-    return;
-  }
-  db.cashOpening = { dinheiro, pix };
-  db.cashOpeningDate = todayKey();
-  save();
-  alert('Caixa inicial salvo!');
-};
-
-window.apagarCaixaInicial = function() {
-  if (!confirm('Zerar o dinheiro e o Pix do caixa inicial de hoje?')) return;
-  db.cashOpening = { dinheiro: 0, pix: 0 };
-  db.cashOpeningDate = todayKey();
-  save();
-};
+window.deleteWithdrawal = id => { if(confirm('Excluir esta retirada? O saldo será recalculado.')) { db.cashWithdrawals=(db.cashWithdrawals||[]).filter(x=>x.id!==id); save(); } };
 
 window.savePaymentFees = function() {
   const debitInput = document.getElementById('feeDebit');
@@ -445,133 +376,68 @@ window.toggleP=id=>{let p=db.products.find(x=>x.id===id);if(p){p.available=!p.av
 window.deleteP=id=>{if(confirm('Excluir este produto? Pedidos já registrados serão mantidos.')){db.products=db.products.filter(p=>p.id!==id);save()}};
 
 
-function addOrderRow(productId='',qty=1,borderValue='',halfProductId=''){
+function addOrderRow(productId='',qty=1,borderValue='',secondProductId='',halfAndHalf=false){
   let id=++itemCounter;
-
-  const produtosDisponiveis = db.products.filter(
-    p => p.available || p.id === productId || p.id === halfProductId
-  );
-  const categorias = [...new Set(
-    produtosDisponiveis.map(p => p.category || 'Sem categoria')
-  )];
-  const produtoAtual = db.products.find(p => p.id === productId);
-  const categoriaInicial = produtoAtual
-    ? (produtoAtual.category || 'Sem categoria')
-    : (categorias[0] || '');
-
-  let row=document.createElement('div');
-  row.className='formrow orderrow item';
-  row.dataset.row=id;
+  const produtosDisponiveis=db.products.filter(p=>p.available||p.id===productId||p.id===secondProductId);
+  const categorias=[...new Set(produtosDisponiveis.map(p=>p.category||'Sem categoria'))];
+  const produtoAtual=db.products.find(p=>p.id===productId);
+  const categoriaInicial=produtoAtual?(produtoAtual.category||'Sem categoria'):(categorias[0]||'');
+  let row=document.createElement('div'); row.className='formrow orderrow item'; row.dataset.row=id;
   row.innerHTML=`
-    <div>
-      <label>Categoria</label>
-      <select class="oi-category">
-        <option value="">Escolher categoria</option>
-        ${categorias.map(c => `<option value="${esc(c)}" ${c===categoriaInicial?'selected':''}>${esc(c)}</option>`).join('')}
-      </select>
-    </div>
-    <div>
-      <label>Produto / primeiro sabor</label>
-      <select class="oi-product"><option value="">Escolher produto</option></select>
-      <div class="oi-half-wrap hidden" style="margin-top:8px">
-        <label style="font-weight:400"><input class="oi-half-check" type="checkbox" style="width:auto;margin-right:6px"> Pizza meio a meio</label>
-        <div class="oi-half-select-wrap hidden">
-          <label>Segundo sabor</label>
-          <select class="oi-half-product"><option value="">Escolher segundo sabor</option></select>
-          <small class="muted">Será cobrado o preço do sabor mais caro.</small>
-        </div>
-      </div>
-    </div>
+    <div><label>Categoria</label><select class="oi-category"><option value="">Escolher categoria</option>${categorias.map(c=>`<option value="${esc(c)}" ${c===categoriaInicial?'selected':''}>${esc(c)}</option>`).join('')}</select></div>
+    <div><label>Primeiro sabor / Produto</label><select class="oi-product"><option value="">Escolher produto</option></select></div>
     <div><label>Quantidade</label><input class="oi-qty" type="number" min="1" step="1" value="${qty}"></div>
     <div><label>Valor da borda (R$)</label><input class="oi-border" type="number" min="0" step="0.01" value="${Number(borderValue)>0?borderValue:''}" placeholder="Valor da borda"></div>
     <div><label>Subtotal</label><input class="oi-sub" value="${brl(0)}" readonly></div>
+    <div class="half-box hidden"><label><input class="oi-half-toggle" type="checkbox" style="width:auto;margin-right:6px" ${halfAndHalf?'checked':''}> Pizza meio a meio</label><div class="oi-second-wrap ${halfAndHalf?'':'hidden'}"><label>Segundo sabor</label><select class="oi-second"><option value="">Escolher segundo sabor</option></select><small class="muted">Será cobrado o preço do sabor mais caro.</small></div></div>
     <div class="right" style="align-items:end"><button type="button" class="danger oi-remove">Remover item</button></div>`;
-
   document.getElementById('orderItems').appendChild(row);
-  const categorySelect=row.querySelector('.oi-category');
-  const productSelect=row.querySelector('.oi-product');
-  const halfWrap=row.querySelector('.oi-half-wrap');
-  const halfCheck=row.querySelector('.oi-half-check');
-  const halfSelectWrap=row.querySelector('.oi-half-select-wrap');
-  const halfSelect=row.querySelector('.oi-half-product');
-
-  function atualizarSegundoSabor(){
+  const categorySelect=row.querySelector('.oi-category'), productSelect=row.querySelector('.oi-product'), secondSelect=row.querySelector('.oi-second'), halfBox=row.querySelector('.half-box'), halfToggle=row.querySelector('.oi-half-toggle'), secondWrap=row.querySelector('.oi-second-wrap');
+  function updateSecondOptions(){
+    const cat=categorySelect.value;
     const firstId=productSelect.value;
-    const first=db.products.find(p=>p.id===firstId);
-    const lista=produtosDisponiveis.filter(p =>
-      (p.category || 'Sem categoria') === categorySelect.value && p.id!==firstId
-    );
-    halfSelect.innerHTML='<option value="">Escolher segundo sabor</option>'+lista.map(p=>
-      `<option value="${p.id}" ${p.id===halfProductId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`
-    ).join('');
-    if(halfProductId && lista.some(p=>p.id===halfProductId)) halfSelect.value=halfProductId;
-    else if(halfCheck.checked && lista.length) halfSelect.value=lista[0].id;
-    if(!first || !String(first.category||'').toLowerCase().includes('pizza')){
-      halfWrap.classList.add('hidden');
-      halfCheck.checked=false;
-      halfSelectWrap.classList.add('hidden');
-      halfSelect.value='';
-    }else{
-      halfWrap.classList.remove('hidden');
-      halfSelectWrap.classList.toggle('hidden',!halfCheck.checked);
-    }
+    const lista=produtosDisponiveis.filter(p=>(p.category||'Sem categoria')===cat && p.id!==firstId);
+    if (secondProductId===firstId) secondProductId='';
+    secondSelect.innerHTML='<option value="">Escolher segundo sabor</option>'+lista.map(p=>`<option value="${p.id}" ${p.id===secondProductId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`).join('');
   }
-
   function atualizarProdutos(){
-    const lista=produtosDisponiveis.filter(p => (p.category||'Sem categoria')===categorySelect.value);
-    productSelect.innerHTML='<option value="">Escolher produto</option>'+lista.map(p=>
-      `<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`
-    ).join('');
-    if(productId && lista.some(p=>p.id===productId)) productSelect.value=productId;
-    atualizarSegundoSabor();
-    calcTotal();
+    const categoria=categorySelect.value;
+    const lista=produtosDisponiveis.filter(p=>(p.category||'Sem categoria')===categoria);
+    productSelect.innerHTML='<option value="">Escolher produto</option>'+lista.map(p=>`<option value="${p.id}" ${p.id===productId?'selected':''}>${esc(p.name)} — ${brl(p.price)}</option>`).join('');
+    const isPizza=/pizza/i.test(categoria);
+    halfBox.classList.toggle('hidden',!isPizza);
+    if(!isPizza){halfToggle.checked=false;secondWrap.classList.add('hidden');secondSelect.value='';}
+    updateSecondOptions(); calcTotal();
   }
-
-  categorySelect.addEventListener('change',()=>{
-    productId=''; halfProductId='';
-    atualizarProdutos();
-  });
-  productSelect.addEventListener('change',()=>{
-    halfProductId='';
-    if(!productSelect.value) halfCheck.checked=false;
-    atualizarSegundoSabor();
-    calcTotal();
-  });
-  halfCheck.addEventListener('change',()=>{
-    halfSelectWrap.classList.toggle('hidden',!halfCheck.checked);
-    if(halfCheck.checked && !halfSelect.value){
-      const firstOther=halfSelect.options[1];
-      if(firstOther) halfSelect.value=firstOther.value;
-    }
-    calcTotal();
-  });
-  halfSelect.addEventListener('change',calcTotal);
+  categorySelect.addEventListener('change',()=>{productId='';secondProductId='';atualizarProdutos();});
+  productSelect.addEventListener('change',()=>{productId=productSelect.value;updateSecondOptions();calcTotal();});
+  secondSelect.addEventListener('change',()=>{secondProductId=secondSelect.value;calcTotal();});
+  halfToggle.addEventListener('change',()=>{secondWrap.classList.toggle('hidden',!halfToggle.checked);if(!halfToggle.checked)secondSelect.value='';calcTotal();});
   row.querySelectorAll('.oi-qty,.oi-border').forEach(e=>e.addEventListener('input',calcTotal));
-  row.querySelector('.oi-remove').onclick=()=>{row.remove();calcTotal()};
+  row.querySelector('.oi-remove').onclick=()=>{row.remove();calcTotal();};
   atualizarProdutos();
-  if(halfProductId){
-    halfCheck.checked=true;
-    atualizarSegundoSabor();
-  }
+  if(halfAndHalf){halfToggle.checked=true;secondWrap.classList.remove('hidden');updateSecondOptions();}
 }
 
+function getRowPricing(r){
+  const p=db.products.find(p=>p.id===r.querySelector('.oi-product').value);
+  const half=r.querySelector('.oi-half-toggle')?.checked||false;
+  const p2=half?db.products.find(p=>p.id===r.querySelector('.oi-second').value):null;
+  const price=p?(p2?Math.max(Number(p.price)||0,Number(p2.price)||0):Number(p.price)||0):0;
+  return {p,p2,half,price};
+}
 function calcTotal(){
   let total=0;
   document.querySelectorAll('.orderrow').forEach(r=>{
-    const p=db.products.find(p=>p.id===r.querySelector('.oi-product').value);
-    const halfId=r.querySelector('.oi-half-check')?.checked?r.querySelector('.oi-half-product')?.value:'';
-    const halfP=halfId?db.products.find(p=>p.id===halfId):null;
+    const {p,p2,price}=getRowPricing(r);
     const q=Math.max(0,Number(r.querySelector('.oi-qty').value)||0);
-    const valorBorda=Math.max(0,Number(r.querySelector('.oi-border')?.value)||0);
-    const unitPrice=p?(halfP?Math.max(Number(p.price)||0,Number(halfP.price)||0):(Number(p.price)||0)):0;
-    const sub=(unitPrice+valorBorda)*q;
-    r.querySelector('.oi-sub').value=brl(sub);
-    total+=sub;
+    const border=Math.max(0,Number(r.querySelector('.oi-border')?.value)||0);
+    const sub=p&&(!r.querySelector('.oi-half-toggle')?.checked||p2)?(price+border)*q:0;
+    r.querySelector('.oi-sub').value=brl(sub); total+=sub;
   });
   const taxa=Math.max(0,Number(document.getElementById('deliveryFee').value)||0);
-  document.getElementById('orderTotal').textContent=brl(total+taxa);
+  total+=taxa; document.getElementById('orderTotal').textContent=brl(total);
 }
-
 
 document.getElementById('deliveryFee').addEventListener('input', calcTotal);
 
@@ -605,28 +471,22 @@ document.getElementById('cancelOrder').onclick=()=>{
 
 document.getElementById('saveOrder').onclick = () => {
   const rows = [...document.querySelectorAll('.orderrow')];
-  let meioAMeioIncompleto = false;
+  const incompleteHalf = rows.some(r => r.querySelector('.oi-half-toggle')?.checked && !r.querySelector('.oi-second').value);
+  if (incompleteHalf) { alert('Escolha o segundo sabor da pizza meio a meio.'); return; }
   const items = rows.map(r => {
     const p = db.products.find(p => p.id === r.querySelector('.oi-product').value);
-    const halfId = r.querySelector('.oi-half-check')?.checked ? r.querySelector('.oi-half-product')?.value : '';
-    const halfP = halfId ? db.products.find(p => p.id === halfId) : null;
     const qty = Math.floor(Number(r.querySelector('.oi-qty').value) || 0);
     const borderValue = Math.max(0, Number(r.querySelector('.oi-border')?.value) || 0);
     if (!p || qty <= 0) return null;
-    if (r.querySelector('.oi-half-check')?.checked && !halfP) {
-      meioAMeioIncompleto = true;
-      return null;
-    }
-    const unitPrice = halfP ? Math.max(Number(p.price)||0, Number(halfP.price)||0) : (Number(p.price) || 0);
-    const name = halfP ? `1/2 ${p.name} + 1/2 ${halfP.name}` : p.name;
+    const half = r.querySelector('.oi-half-toggle')?.checked || false;
+    const p2 = half ? db.products.find(x => x.id === r.querySelector('.oi-second').value) : null;
+    if (half && !p2) return null;
+    const unitPrice = p2 ? Math.max(Number(p.price)||0, Number(p2.price)||0) : (Number(p.price) || 0);
+    const itemName = p2 ? `Meio ${p.name} + Meio ${p2.name}` : p.name;
     const subtotal = (unitPrice + borderValue) * qty;
-    return { productId:p.id, halfProductId:halfP?.id || '', halfName:halfP?.name || '', name, price:unitPrice, qty, borderValue, subtotal };
+    return { productId:p.id, secondProductId:p2?.id || '', halfAndHalf:!!p2, name:itemName, firstFlavor:p.name, secondFlavor:p2?.name || '', price:unitPrice, qty, borderValue, subtotal };
   }).filter(Boolean);
 
-  if (meioAMeioIncompleto) {
-    alert('Escolha o segundo sabor da pizza meio a meio.');
-    return;
-  }
   if (!items.length) {
     alert('Escolha pelo menos um produto e uma quantidade.');
     return;
@@ -717,7 +577,7 @@ function editOrder(id) {
   itemCounter = 0;
 
   (o.items || []).forEach(item => {
-    addOrderRow(item.productId || '', item.qty || 1, item.borderValue ?? '', item.halfProductId || '');
+    addOrderRow(item.productId || '', item.qty || 1, item.borderValue ?? '', item.secondProductId || '', !!item.halfAndHalf);
   });
   if (!(o.items || []).length) addOrderRow();
 
@@ -906,7 +766,7 @@ window.deleteExpense = id => {
 
 function renderRecent(){let list=db.orders.filter(o=>localDateKey(o.created)===todayKey()&&!o.closedAt).slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
 document.getElementById('exportData').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-meupedido-massatop.json';a.click();URL.revokeObjectURL(a.href)};
-document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;db.expenses ||= [];db.dailyClosings ||= [];db.paymentFees ||= {debit:1.5,credit:3.5};save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
+document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;db.expenses ||= [];db.dailyClosings ||= [];db.paymentFees ||= {debit:1.5,credit:3.5};db.cashWithdrawals ||= [];db.cashOpening ||= {date:todayKey(),dinheiro:0,pix:0};save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
 
 function renderDailyClosings(){
   const el=document.getElementById('dailyClosings');
@@ -937,7 +797,11 @@ document.getElementById('closeDayBtn')?.addEventListener('click',()=>{
   const closedAt=new Date().toISOString();
   todays.forEach(o=>{o.closedAt=closedAt;});
   db.dailyClosings ||= [];
-  db.dailyClosings.push({date,closedAt,orders:todays.length,cash,pix,debit,credit,other});
+  const opening=db.cashOpening?.date===date?db.cashOpening:{dinheiro:0,pix:0};
+  const withdrawals=(db.cashWithdrawals||[]).filter(x=>x.date===date);
+  const withdrawCash=withdrawals.filter(x=>x.type==='Dinheiro').reduce((s,x)=>s+Number(x.amount||0),0);
+  const withdrawPix=withdrawals.filter(x=>x.type==='Pix').reduce((s,x)=>s+Number(x.amount||0),0);
+  db.dailyClosings.push({date,closedAt,orders:todays.length,cash,pix,debit,credit,other,openingCash:Number(opening.dinheiro||0),openingPix:Number(opening.pix||0),withdrawCash,withdrawPix});
   save();
   alert('Dia fechado! Os pedidos foram guardados no histórico sem mudar os status.');
 });
