@@ -21,6 +21,7 @@ main{max-width:1000px;margin:0 auto;padding:16px}.stats{display:grid;grid-templa
 
 h2{font-size:20px;margin:4px 0 14px}.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}.toolbar input,.toolbar select{flex:1;min-width:150px}
 input,select,textarea{width:100%;padding:11px;border:1px solid #ccc;border-radius:8px;font:inherit;background:white}label{display:block;font-size:13px;font-weight:700;margin:10px 0 5px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px}.item{margin-bottom:10px}.itemtop{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.item h3{font-size:16px;margin:0 0 5px}.muted{color:var(--muted);font-size:13px}.price{font-weight:800;font-size:17px;white-space:nowrap}.actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:12px}.actions button{padding:8px 10px;font-size:12px}.status{display:inline-block;background:#fff3cd;border-radius:20px;padding:5px 9px;font-size:12px;font-weight:700}
+.payment-badge{display:inline-block;border-radius:20px;padding:6px 10px;font-size:12px;font-weight:800}.payment-badge.waiting,.payment-waiting{background:#fff4d6;border-color:#f2d58b;color:#765300}.payment-badge.paid,.payment-paid{background:#e8f5e9;border-color:#b7dfbd;color:#1d6b32}.payment-mini{font-size:11px;font-weight:700;margin-top:5px}.payment-mini.waiting{color:#946600}.payment-mini.paid{color:#24733a}
 .formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.empty{padding:28px;text-align:center;color:var(--muted);background:white;border:1px dashed #ccc;border-radius:12px}
 #notice{padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:9px;font-size:13px;margin-bottom:14px}
 .hidden{display:none!important}#splitPaymentFields.hidden{display:none!important}.right{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.qty{display:flex;gap:8px;align-items:center}.qty input{width:90px}
@@ -66,6 +67,21 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
     <h3>Despesas cadastradas no mês</h3>
     <div id="expenseList"></div>
   </div>
+  <div class="panel" style="margin-top:12px">
+    <h3>Quantidade de produtos vendidos</h3>
+    <p class="muted">Veja quantas unidades saíram por categoria e por produto. Só entram pedidos marcados como Entregue. Pizza meio a meio conta como uma pizza.</p>
+    <div class="formrow">
+      <div><label for="quantityPeriod">Consultar</label><select id="quantityPeriod"><option value="today">Hoje</option><option value="day">Dia específico</option><option value="range">Período (data inicial e final)</option><option value="week">Semana</option><option value="month">Mês</option></select></div>
+      <div id="quantityDayWrap" class="hidden"><label for="quantityDay">Escolha o dia</label><input id="quantityDay" type="date"></div>
+      <div id="quantityStartWrap" class="hidden"><label for="quantityStart">Data inicial</label><input id="quantityStart" type="date"></div>
+      <div id="quantityEndWrap" class="hidden"><label for="quantityEnd">Data final</label><input id="quantityEnd" type="date"></div>
+      <div id="quantityWeekWrap" class="hidden"><label for="quantityWeek">Escolha um dia da semana</label><input id="quantityWeek" type="date"></div>
+      <div id="quantityMonthWrap" class="hidden"><label for="quantityMonth">Escolha o mês</label><input id="quantityMonth" type="month"></div>
+    </div>
+    <div id="quantityPeriodLabel" class="muted" style="margin:10px 0"></div>
+    <div id="quantityStats" class="stats"></div>
+    <div id="quantityDetails"></div>
+  </div>
 </section>
 <section id="page-produtos" class="hidden">
 <div class="toolbar"><input id="productSearch" placeholder="Buscar produto..."><button class="primary" id="newProduct">+ Novo produto</button></div>
@@ -96,15 +112,21 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 </div>
 </section>
 <section id="page-pedidos" class="hidden">
-<div class="toolbar"><select id="orderDateFilter"><option value="today">Pedidos de hoje</option><option value="all">Todos os pedidos (histórico)</option></select><select id="statusFilter"><option value="">Todos os status</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
+<div class="toolbar"><select id="orderDateFilter"><option value="today">Pedidos de hoje</option><option value="all">Todos os pedidos (histórico)</option></select><select id="statusFilter"><option value="">Todos os status do pedido</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><select id="paymentStatusFilter"><option value="">Todos os pagamentos</option><option value="Aguardando pagamento">Aguardando pagamento</option><option value="Pago">Pago</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
+<div id="paymentStatusSummary" class="stats"></div>
 <div id="orderForm" class="panel hidden">
 <h2>Novo pedido</h2>
 <div class="formrow"><div><label for="cname">Nome do cliente</label><input id="cname" placeholder="Nome"></div><div><label for="cphone">Telefone</label><input id="cphone" placeholder="Telefone (opcional)"></div><div><label for="caddress">Endereço / entrega</label><input id="caddress" placeholder="Endereço (opcional)"></div></div>
 <div class="panel" style="margin:12px 0;background:#fffdf5">
-  <h3>Forma de pagamento</h3>
-  <label for="paymentMethod">Como o cliente vai pagar?</label>
+  <h3>Pagamento</h3>
+  <label for="paymentStatus">Situação do pagamento</label>
+  <select id="paymentStatus">
+    <option value="Aguardando pagamento" selected>⏳ Aguardando pagamento</option>
+    <option value="Pago">✓ Pago</option>
+  </select>
+  <label for="paymentMethod">Forma de pagamento (pode definir depois)</label>
   <select id="paymentMethod">
-    <option value="">Selecione a forma de pagamento</option>
+    <option value="">Ainda não definido</option>
     <option value="Pix">Pix</option>
     <option value="Dinheiro">Dinheiro</option>
     <option value="Cartão de débito">Cartão de débito</option>
@@ -227,24 +249,27 @@ function load(){try{return JSON.parse(localStorage.getItem(KEY))||{products:[],o
 function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function todayKey(){return localDateKey(new Date())}
-function paymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
+function paymentStatusOf(o){return o.paymentStatus || 'Pago'}
+function isPaymentReceived(o){return paymentStatusOf(o)==='Pago'}
+function rawPaymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
+function paymentParts(o){if(!isPaymentReceived(o))return {pix:0,cash:0,debit:0,credit:0,other:0};return rawPaymentParts(o)}
 function paymentMethodFromOrder(o){
   if(o.payment && o.payment !== 'Pagamento dividido') {
     return o.payment==='Outro / na entrega' || o.payment==='Outro' ? 'Dividido' : o.payment;
   }
   if(o.paymentBreakdown){
-    const p=paymentParts(o),used=[['pix','Pix'],['cash','Dinheiro'],['debit','Cartão de débito'],['credit','Cartão de crédito'],['other','Outro / na entrega']].filter(([k])=>p[k]>0);
+    const p=rawPaymentParts(o),used=[['pix','Pix'],['cash','Dinheiro'],['debit','Cartão de débito'],['credit','Cartão de crédito'],['other','Outro / na entrega']].filter(([k])=>p[k]>0);
     if(used.length===1)return used[0][1];
     if(used.length>1)return 'Dividido';
   }
   return o.payment==='Pagamento dividido'?'Dividido':'';
 }
-function paymentLabel(o){if(!o.paymentBreakdown)return o.payment||'Não informado';const p=paymentParts(o),labels=[['pix','Pix'],['cash','Dinheiro'],['debit','Débito'],['credit','Crédito'],['other',o.paymentBreakdown.otherName||'Outro']];return labels.filter(([k])=>p[k]>0).map(([k,l])=>`${l}: ${brl(p[k])}`).join(' + ')||'Não informado'}
+function paymentLabel(o){if(!o.paymentBreakdown)return o.payment||'Não definido';const p=rawPaymentParts(o),labels=[['pix','Pix'],['cash','Dinheiro'],['debit','Débito'],['credit','Crédito'],['other',o.paymentBreakdown.otherName||'Outro']];return labels.filter(([k])=>p[k]>0).map(([k,l])=>`${l}: ${brl(p[k])}`).join(' + ')||'Não informado'}
 function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entregue').reduce((sum,o)=>sum+paymentParts(o)[payment],0)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
-function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport();renderDailyClosings();renderCloseDayState()}
+function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport();renderQuantityReport();renderDailyClosings();renderCloseDayState()}
 
 function renderStats() {
   const today = new Date().toDateString();
@@ -272,7 +297,7 @@ function renderStats() {
   const descontoCredito = creditoBruto * taxaCredito / 100;
   const debitoLiquido = debitoBruto - descontoDebito;
   const creditoLiquido = creditoBruto - descontoCredito;
-  const vendasBrutas = entregues.reduce((s, o) => s + Number(o.total || 0), 0);
+  const vendasBrutas = entregues.filter(isPaymentReceived).reduce((s, o) => s + Number(o.total || 0), 0);
   const totalLiquido = dinheiro + pix + debitoLiquido + creditoLiquido + outros;
   const pedidosAbertos = db.orders.filter(o => !o.closedAt && !['Entregue', 'Cancelado'].includes(o.status)).length;
 
@@ -448,6 +473,7 @@ document.getElementById('newOrder').onclick=()=>{
   document.getElementById('cname').value='';
   document.getElementById('cphone').value='';
   document.getElementById('caddress').value='';
+  document.getElementById('paymentStatus').value='Aguardando pagamento';
   document.getElementById('paymentMethod').value='';
   ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id).value=0);
   document.getElementById('payOtherName').value='';
@@ -484,7 +510,7 @@ document.getElementById('saveOrder').onclick = () => {
     const unitPrice = p2 ? Math.max(Number(p.price)||0, Number(p2.price)||0) : (Number(p.price) || 0);
     const itemName = p2 ? `Meio ${p.name} + Meio ${p2.name}` : p.name;
     const subtotal = (unitPrice + borderValue) * qty;
-    return { productId:p.id, secondProductId:p2?.id || '', halfAndHalf:!!p2, name:itemName, firstFlavor:p.name, secondFlavor:p2?.name || '', price:unitPrice, qty, borderValue, subtotal };
+    return { productId:p.id, secondProductId:p2?.id || '', category:p.category||'Sem categoria', halfAndHalf:!!p2, name:itemName, firstFlavor:p.name, secondFlavor:p2?.name || '', price:unitPrice, qty, borderValue, subtotal };
   }).filter(Boolean);
 
   if (!items.length) {
@@ -496,7 +522,8 @@ document.getElementById('saveOrder').onclick = () => {
   const subtotal = items.reduce((sum, item) => sum + item.subtotal, 0);
   const total = subtotal + deliveryFee;
   const selectedPayment=document.getElementById('paymentMethod').value;
-  if(!selectedPayment){alert('Escolha a forma de pagamento.');return;}
+  const selectedPaymentStatus=document.getElementById('paymentStatus').value || 'Aguardando pagamento';
+  if(!selectedPayment && selectedPaymentStatus==='Pago'){alert('Escolha a forma de pagamento para marcar como pago.');return;}
   const paymentBreakdown={pix:0,cash:0,debit:0,credit:0,other:0,otherName:document.getElementById('payOtherName').value.trim()};
   if(selectedPayment==='Dividido'){
     paymentBreakdown.pix=Number(document.getElementById('payPix').value)||0;
@@ -506,9 +533,9 @@ document.getElementById('saveOrder').onclick = () => {
     paymentBreakdown.other=Number(document.getElementById('payOther').value)||0;
     const allocated=paymentBreakdown.pix+paymentBreakdown.cash+paymentBreakdown.debit+paymentBreakdown.credit+paymentBreakdown.other;
     if(Math.abs(allocated-total)>0.009){alert(`A soma dos pagamentos (${brl(allocated)}) precisa ser igual ao total do pedido (${brl(total)}).`);return;}
-  }else{
+  }else if(selectedPayment){
     const key={'Pix':'pix','Dinheiro':'cash','Cartão de débito':'debit','Cartão de crédito':'credit'}[selectedPayment];
-    paymentBreakdown[key]=total;
+    if(key) paymentBreakdown[key]=total;
   }
   const existing = editingOrderId ? db.orders.find(o => o.id === editingOrderId) : null;
 
@@ -519,7 +546,7 @@ document.getElementById('saveOrder').onclick = () => {
     customer: document.getElementById('cname').value.trim() || 'Cliente',
     phone: document.getElementById('cphone').value.trim(),
     address: document.getElementById('caddress').value.trim(),
-    payment: selectedPayment==='Dividido'?'Pagamento dividido':selectedPayment, paymentBreakdown,
+    payment: selectedPayment==='Dividido'?'Pagamento dividido':selectedPayment, paymentBreakdown, paymentStatus:selectedPaymentStatus,
     notes: document.getElementById('notes').value.trim(),
     courierName: document.getElementById('courierName').value.trim(),
     courierPay: Math.max(0, Number(document.getElementById('courierPay').value) || 0),
@@ -560,7 +587,8 @@ function editOrder(id) {
   document.getElementById('cname').value = o.customer || '';
   document.getElementById('cphone').value = o.phone || '';
   document.getElementById('caddress').value = o.address || '';
-  const parts=paymentParts(o);
+  const parts=rawPaymentParts(o);
+  document.getElementById('paymentStatus').value=paymentStatusOf(o);
   document.getElementById('payPix').value=parts.pix;
   document.getElementById('payCash').value=parts.cash;
   document.getElementById('payDebit').value=parts.debit;
@@ -604,7 +632,7 @@ window.printOrder = function(id) {
   const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Pedido #${esc(o.number)}</title>
     <style>body{font:14px Arial,sans-serif;color:#000;width:72mm;max-width:100%;margin:0 auto;padding:4mm}h2,p{margin:5px 0}h2{text-align:center;font-size:19px}.center{text-align:center}.line{border-top:1px dashed #000;margin:8px 0}table{width:100%;border-collapse:collapse}td{padding:4px 0;vertical-align:top}.right{text-align:right;white-space:nowrap}.total{font-size:18px;font-weight:bold}small{font-size:11px}@media print{body{width:auto;margin:0;padding:2mm}@page{margin:3mm}}</style></head><body>
     <h2>MASSA TOP</h2><p class="center">PEDIDO #${esc(o.number)}</p><p class="center">${esc(new Date(o.created).toLocaleString('pt-BR'))}</p><div class="line"></div>
-    <p><b>Cliente:</b> ${esc(o.customer || 'Cliente')}</p>${o.phone ? `<p><b>Telefone:</b> ${esc(o.phone)}</p>` : ''}${o.address ? `<p><b>Endereço:</b> ${esc(o.address)}</p>` : ''}<p><b>Status:</b> ${esc(o.status || 'Recebido')}</p><div class="line"></div>
+    <p><b>Cliente:</b> ${esc(o.customer || 'Cliente')}</p>${o.phone ? `<p><b>Telefone:</b> ${esc(o.phone)}</p>` : ''}${o.address ? `<p><b>Endereço:</b> ${esc(o.address)}</p>` : ''}<p><b>Status:</b> ${esc(o.status || 'Recebido')}</p><p><b>Pagamento:</b> ${esc(paymentStatusOf(o))}</p><div class="line"></div>
     <table>${itemRows}</table><div class="line"></div><p>Subtotal: <span style="float:right">${brl(o.subtotal ?? (o.total - (o.deliveryFee || 0)))}</span></p><p>Taxa de entrega: <span style="float:right">${brl(o.deliveryFee || 0)}</span></p><p class="total">TOTAL: <span style="float:right">${brl(o.total)}</span></p>
     <div class="line"></div><p><b>Pagamento:</b> ${esc(paymentLabel(o))}</p>${o.courierName ? `<p><b>Entregador:</b> ${esc(o.courierName)}</p>` : ''}${o.courierPay ? `<p><b>Valor do entregador:</b> ${brl(o.courierPay)}</p>` : ''}${o.notes ? `<div class="line"></div><p><b>Observações:</b> ${esc(o.notes)}</p>` : ''}<div class="line"></div><p class="center">Obrigado pela preferência!</p>
     <script>window.onload=function(){window.focus();window.print();};<\/script></body></html>`;
@@ -615,14 +643,27 @@ window.printOrder = function(id) {
 
 function renderOrders() {
   let status = document.getElementById('statusFilter')?.value || '';
+  let paymentStatus = document.getElementById('paymentStatusFilter')?.value || '';
   let q = (document.getElementById('orderSearch')?.value || '').toLowerCase();
 
   const dateMode = document.getElementById('orderDateFilter')?.value || 'today';
   let orders = db.orders.filter(o =>
     (dateMode === 'all' || (localDateKey(o.created) === todayKey() && !o.closedAt)) &&
     (!status || o.status === status) &&
+    (!paymentStatus || paymentStatusOf(o) === paymentStatus) &&
     (o.customer + ' ' + o.phone + ' ' + o.number).toLowerCase().includes(q)
   );
+
+  const summaryBase = db.orders.filter(o => dateMode === 'all' || (localDateKey(o.created) === todayKey() && !o.closedAt));
+  const summaryActive = summaryBase.filter(o => o.status !== 'Cancelado');
+  const waiting = summaryActive.filter(o => paymentStatusOf(o) === 'Aguardando pagamento');
+  const paid = summaryActive.filter(o => paymentStatusOf(o) === 'Pago');
+  const waitingTotal = waiting.reduce((sum,o)=>sum+Number(o.total||0),0);
+  const paidTotal = paid.reduce((sum,o)=>sum+Number(o.total||0),0);
+  const summary = document.getElementById('paymentStatusSummary');
+  if(summary) summary.innerHTML = `
+    <div class="stat payment-waiting"><span>⏳ Aguardando pagamento</span><strong>${waiting.length}</strong><small>Total pendente: ${brl(waitingTotal)}</small></div>
+    <div class="stat payment-paid"><span>✓ Pagos</span><strong>${paid.length}</strong><small>Total recebido: ${brl(paidTotal)}</small></div>`;
 
   document.getElementById('orderList').innerHTML = orders.length
     ? orders.map(o => `
@@ -643,14 +684,22 @@ function renderOrders() {
         ${o.phone ? `<p class="muted">Telefone: ${esc(o.phone)}</p>` : ''}
         ${o.notes ? `<p class="muted">Obs.: ${esc(o.notes)}</p>` : ''}
         <p class="muted">Subtotal: ${brl(o.subtotal ?? (o.total - (o.deliveryFee || 0)))} · Taxa: ${brl(o.deliveryFee || 0)} · Entregador: ${esc(o.courierName || 'Não informado')} (${brl(o.courierPay || 0)})</p>
+        <p><span class="payment-badge ${isPaymentReceived(o)?'paid':'waiting'}">${isPaymentReceived(o)?'✓ Pago':'⏳ Aguardando pagamento'}</span></p>
 
         <div class="formrow">
           <div>
-            <label>Status</label>
+            <label>Status do pedido</label>
             <select onchange="changeStatus('${o.id}',this.value)">
               ${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado']
                 .map(s => `<option ${o.status === s ? 'selected' : ''}>${s}</option>`)
                 .join('')}
+            </select>
+          </div>
+          <div>
+            <label>Situação do pagamento</label>
+            <select onchange="changePaymentStatus('${o.id}',this.value)">
+              <option value="Aguardando pagamento" ${paymentStatusOf(o)==='Aguardando pagamento'?'selected':''}>⏳ Aguardando pagamento</option>
+              <option value="Pago" ${isPaymentReceived(o)?'selected':''}>✓ Pago</option>
             </select>
           </div>
           <div>
@@ -674,6 +723,7 @@ function renderOrders() {
 }
 
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
+window.changePaymentStatus=(id,status)=>{const o=db.orders.find(o=>o.id===id);if(!o)return;if(status==='Pago'){const parts=rawPaymentParts(o),allocated=parts.pix+parts.cash+parts.debit+parts.credit+parts.other;if(!o.payment||Math.abs(allocated-Number(o.total||0))>0.009){alert('Para marcar como pago, edite o pedido, escolha a forma de pagamento e confira os valores.');renderOrders();return;}}o.paymentStatus=status;save();renderOrders();};
 window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
 // Botão Editar: usa delegação de eventos para continuar funcionando após a lista ser redesenhada.
 document.getElementById('orderList').addEventListener('click', function(event) {
@@ -697,6 +747,96 @@ function monthMatches(dateValue, monthValue){
   return !Number.isNaN(d.getTime()) &&
     `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === monthValue;
 }
+function dateOnlyKey(value){
+  if(!value)return '';
+  const d=new Date(`${value}T12:00:00`);
+  if(Number.isNaN(d.getTime()))return '';
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function quantityPeriodBounds(){
+  const mode=document.getElementById('quantityPeriod')?.value||'today';
+  const today=todayKey();
+  if(mode==='today')return {start:today,end:today,label:`Hoje · ${today.split('-').reverse().join('/')}`};
+  if(mode==='day'){
+    const day=document.getElementById('quantityDay')?.value||today;
+    return {start:day,end:day,label:`Dia ${day.split('-').reverse().join('/')}`};
+  }
+  if(mode==='range'){
+    const start=document.getElementById('quantityStart')?.value||today;
+    const end=document.getElementById('quantityEnd')?.value||start;
+    return {start,end,label:`De ${start.split('-').reverse().join('/')} até ${end.split('-').reverse().join('/')}`};
+  }
+  if(mode==='week'){
+    const anchor=document.getElementById('quantityWeek')?.value||today;
+    const d=new Date(`${anchor}T12:00:00`);
+    const weekday=(d.getDay()+6)%7;
+    d.setDate(d.getDate()-weekday);
+    const start=dateOnlyKey(d.toISOString());
+    d.setDate(d.getDate()+6);
+    const end=dateOnlyKey(d.toISOString());
+    return {start,end,label:`Semana de ${start.split('-').reverse().join('/')} até ${end.split('-').reverse().join('/')}`};
+  }
+  const month=document.getElementById('quantityMonth')?.value||currentMonthValue();
+  const [year,mon]=month.split('-').map(Number);
+  const start=`${month}-01`;
+  const last=new Date(year,mon,0).getDate();
+  const end=`${month}-${String(last).padStart(2,'0')}`;
+  return {start,end,label:`Mês ${mon}/${year}`};
+}
+function renderQuantityReport(){
+  const stats=document.getElementById('quantityStats');
+  const details=document.getElementById('quantityDetails');
+  if(!stats||!details)return;
+  const mode=document.getElementById('quantityPeriod')?.value||'today';
+  ['quantityDayWrap','quantityStartWrap','quantityEndWrap','quantityWeekWrap','quantityMonthWrap'].forEach(id=>document.getElementById(id)?.classList.add('hidden'));
+  if(mode==='day')document.getElementById('quantityDayWrap')?.classList.remove('hidden');
+  if(mode==='range'){
+    document.getElementById('quantityStartWrap')?.classList.remove('hidden');
+    document.getElementById('quantityEndWrap')?.classList.remove('hidden');
+  }
+  if(mode==='week')document.getElementById('quantityWeekWrap')?.classList.remove('hidden');
+  if(mode==='month')document.getElementById('quantityMonthWrap')?.classList.remove('hidden');
+  const {start,end,label}=quantityPeriodBounds();
+  const labelEl=document.getElementById('quantityPeriodLabel');
+  if(labelEl)labelEl.textContent=label;
+  if(start>end){
+    stats.innerHTML='<div class="empty">A data inicial não pode ser depois da data final.</div>';
+    details.innerHTML='';
+    return;
+  }
+  // Inclui pedidos entregues mesmo depois do fechamento do dia, pois continuam no histórico.
+  const orders=(db.orders||[]).filter(o=>o.status==='Entregue'&&localDateKey(o.created)>=start&&localDateKey(o.created)<=end);
+  const byCategory={},byProduct={};
+  let totalUnits=0;
+  orders.forEach(order=>(order.items||[]).forEach(item=>{
+    const qty=Math.max(0,Number(item.qty)||0);
+    if(!qty)return;
+    const product=(db.products||[]).find(p=>p.id===item.productId);
+    const category=item.category||product?.category||'Sem categoria';
+    const productName=item.name||product?.name||'Produto sem nome';
+    byCategory[category]=(byCategory[category]||0)+qty;
+    byProduct[productName]=(byProduct[productName]||0)+qty;
+    totalUnits+=qty;
+  }));
+  stats.innerHTML=`
+    <div class="stat finance-total"><span>Total de unidades</span><strong>${totalUnits}</strong></div>
+    <div class="stat"><span>Pedidos entregues</span><strong>${orders.length}</strong></div>
+    <div class="stat"><span>Categorias vendidas</span><strong>${Object.keys(byCategory).length}</strong></div>`;
+  const categories=Object.entries(byCategory).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pt-BR'));
+  const products=Object.entries(byProduct).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0],'pt-BR'));
+  details.innerHTML=categories.length?`
+    <h4 class="finance-title">Quantidade por categoria</h4>
+    <div class="stats">${categories.map(([name,qty])=>`<div class="stat"><span>${esc(name)}</span><strong>${qty}</strong></div>`).join('')}</div>
+    <h4 class="finance-title">Quantidade por produto / sabor</h4>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse"><thead><tr><th style="text-align:left;padding:8px">Produto</th><th style="text-align:right;padding:8px">Unidades</th></tr></thead><tbody>${products.map(([name,qty])=>`<tr style="border-top:1px solid var(--line)"><td style="padding:8px">${esc(name)}</td><td style="padding:8px;text-align:right;font-weight:bold">${qty}</td></tr>`).join('')}</tbody></table></div>`
+    :'<div class="empty">Nenhum produto entregue neste período.</div>';
+}
+['quantityPeriod','quantityDay','quantityStart','quantityEnd','quantityWeek','quantityMonth'].forEach(id=>document.getElementById(id)?.addEventListener('change',renderQuantityReport));
+['quantityDay','quantityWeek'].forEach(id=>{const el=document.getElementById(id);if(el)el.value=todayKey()});
+document.getElementById('quantityStart').value=todayKey();
+document.getElementById('quantityEnd').value=todayKey();
+document.getElementById('quantityMonth').value=currentMonthValue();
+
 function renderMonthlyReport(){
   const monthInput = document.getElementById('reportMonth');
   if (!monthInput) return;
@@ -704,7 +844,8 @@ function renderMonthlyReport(){
   const month = monthInput.value;
   const monthOrders = db.orders.filter(o => monthMatches(o.created, month));
   const delivered = monthOrders.filter(o => o.status === 'Entregue');
-  const gross = delivered.reduce((sum,o) => sum + Number(o.total || 0), 0);
+  const paidDelivered = delivered.filter(isPaymentReceived);
+  const gross = paidDelivered.reduce((sum,o) => sum + Number(o.total || 0), 0);
   const debitGross=delivered.reduce((sum,o)=>sum+paymentParts(o).debit,0);
   const creditGross=delivered.reduce((sum,o)=>sum+paymentParts(o).credit,0);
   const debitRate = Math.max(0, Number(db.paymentFees?.debit ?? 1.5) || 0);
@@ -723,7 +864,7 @@ function renderMonthlyReport(){
   ].map(([value,label])=>({label,total:delivered.reduce((sum,o)=>sum+paymentParts(o)[({'Dinheiro':'cash','Pix':'pix','Cartão de débito':'debit','Cartão de crédito':'credit'})[value]],0)}));
   const otherPayments=delivered.reduce((sum,o)=>sum+paymentParts(o).other,0);
   document.getElementById('monthlyStats').innerHTML = `
-    <div class="stat finance-total"><span>Faturamento bruto</span><strong>${brl(gross)}</strong><small>${delivered.length} pedido(s) entregues</small></div>
+    <div class="stat finance-total"><span>Faturamento bruto</span><strong>${brl(gross)}</strong><small>${paidDelivered.length} pedido(s) entregues e pagos</small></div>
     <div class="stat finance"><span>Taxas dos cartões</span><strong>${brl(cardFees)}</strong><small>Débito ${brl(debitGross*debitRate/100)} · Crédito ${brl(creditGross*creditRate/100)}</small></div>
     <div class="stat finance"><span>Faturamento após taxas</span><strong>${brl(netSales)}</strong></div>
     <div class="stat"><span>Despesas cadastradas</span><strong>${brl(manualExpenses)}</strong></div>
@@ -764,7 +905,7 @@ window.deleteExpense = id => {
   }
 };
 
-function renderRecent(){let list=db.orders.filter(o=>localDateKey(o.created)===todayKey()&&!o.closedAt).slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
+function renderRecent(){let list=db.orders.filter(o=>localDateKey(o.created)===todayKey()&&!o.closedAt).slice(0,5);document.getElementById('recent').innerHTML=list.length?list.map(o=>`<div class="item"><div class="itemtop"><div><b>#${o.number} · ${esc(o.customer)}</b><div class="muted">${new Date(o.created).toLocaleString('pt-BR')}</div></div><div style="text-align:right"><div class="price">${brl(o.total)}</div><span class="status">${esc(o.status)}</span><div class="payment-mini ${isPaymentReceived(o)?'paid':'waiting'}">${isPaymentReceived(o)?'Pago':'Aguardando pagamento'}</div></div></div></div>`).join(''):'<div class="empty">Seus pedidos aparecerão aqui.</div>'}
 document.getElementById('exportData').onclick=()=>{let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='backup-meupedido-massatop.json';a.click();URL.revokeObjectURL(a.href)};
 document.getElementById('importFile').onchange=e=>{let f=e.target.files[0];if(!f)return;let r=new FileReader();r.onload=()=>{try{let d=JSON.parse(r.result);if(!Array.isArray(d.products)||!Array.isArray(d.orders))throw Error();if(confirm('Restaurar substituirá os dados atuais neste navegador. Continuar?')){db=d;db.expenses ||= [];db.dailyClosings ||= [];db.paymentFees ||= {debit:1.5,credit:3.5};db.cashWithdrawals ||= [];db.cashOpening ||= {date:todayKey(),dinheiro:0,pix:0};save();alert('Backup restaurado.')}}catch(err){alert('Arquivo de backup inválido.')}e.target.value=''};r.readAsText(f)};
 
@@ -806,6 +947,7 @@ document.getElementById('closeDayBtn')?.addEventListener('click',()=>{
   alert('Dia fechado! Os pedidos foram guardados no histórico sem mudar os status.');
 });
 document.getElementById('orderDateFilter')?.addEventListener('change',renderOrders);
+document.getElementById('paymentStatusFilter')?.addEventListener('change',renderOrders);
 
 function togglePaymentFields(){
   const method=document.getElementById('paymentMethod')?.value;
