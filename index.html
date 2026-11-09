@@ -250,11 +250,17 @@ function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function todayKey(){return localDateKey(new Date())}
 function paymentStatusOf(o){
-  if(o.paymentStatus) return o.paymentStatus;
-  // Pedidos antigos sem situação salva só contam como pagos quando há forma e valor de pagamento registrados.
+  // Só considera recebido quando existe uma forma de pagamento confirmada
+  // e o valor distribuído corresponde ao total do pedido.
+  const method=paymentMethodFromOrder(o);
   const parts=rawPaymentParts(o);
   const allocated=parts.pix+parts.cash+parts.debit+parts.credit+parts.other;
-  return o.payment && (allocated>0 || Number(o.total||0)===0) ? 'Pago' : 'Aguardando pagamento';
+  const dividedIsConfirmed=method!=='Dividido'||!!o.paymentBreakdown;
+  const paymentConfirmed=!!method&&dividedIsConfirmed&&Math.abs(allocated-Number(o.total||0))<=0.009;
+  if(o.paymentStatus==='Pago') return paymentConfirmed?'Pago':'Aguardando pagamento';
+  if(o.paymentStatus) return o.paymentStatus;
+  // Compatibilidade com pedidos antigos: sem forma/valor confirmado, ficam pendentes.
+  return paymentConfirmed?'Pago':'Aguardando pagamento';
 }
 function isPaymentReceived(o){return paymentStatusOf(o)==='Pago'}
 function rawPaymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
@@ -271,7 +277,7 @@ function paymentMethodFromOrder(o){
   return o.payment==='Pagamento dividido'?'Dividido':'';
 }
 function paymentLabel(o){if(!o.paymentBreakdown)return o.payment||'Não definido';const p=rawPaymentParts(o),labels=[['pix','Pix'],['cash','Dinheiro'],['debit','Débito'],['credit','Crédito'],['other',o.paymentBreakdown.otherName||'Outro']];return labels.filter(([k])=>p[k]>0).map(([k,l])=>`${l}: ${brl(p[k])}`).join(' + ')||'Não informado'}
-function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entregue').reduce((sum,o)=>sum+paymentParts(o)[payment],0)}
+function moneyForClose(orders,payment){return orders.filter(isPaymentReceived).reduce((sum,o)=>sum+paymentParts(o)[payment],0)}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
@@ -315,8 +321,8 @@ function renderStats() {
   const retiradoPix = retiradasHoje.filter(x => x.type === 'Pix').reduce((s,x)=>s+Number(x.amount||0),0);
   const fundoDinheiro = Number(db.cashOpening.dinheiro||0);
   const fundoPix = Number(db.cashOpening.pix||0);
-  const saldoDinheiro = fundoDinheiro + entreguesHoje.reduce((s,o)=>s+paymentParts(o).cash,0) - retiradoDinheiro;
-  const saldoPix = fundoPix + entreguesHoje.reduce((s,o)=>s+paymentParts(o).pix,0) - retiradoPix;
+  const saldoDinheiro = fundoDinheiro + pagamentosRecebidos.reduce((s,o)=>s+paymentParts(o).cash,0) - retiradoDinheiro;
+  const saldoPix = fundoPix + pagamentosRecebidos.reduce((s,o)=>s+paymentParts(o).pix,0) - retiradoPix;
 
   const entregadores = {};
   entregues.forEach(o => { const nome=(o.courierName||'').trim(), valor=Number(o.courierPay||0); if(!nome||valor<=0)return; if(!entregadores[nome])entregadores[nome]={pedidos:0,total:0}; entregadores[nome].pedidos++; entregadores[nome].total+=valor; });
@@ -460,6 +466,32 @@ function getRowPricing(r){
   const price=p?(p2?Math.max(Number(p.price)||0,Number(p2.price)||0):Number(p.price)||0):0;
   return {p,p2,half,price};
 }
+function currentOrderFormTotal(){
+  let total=0;
+  document.querySelectorAll('.orderrow').forEach(r=>{
+    const {p,p2,price}=getRowPricing(r);
+    const q=Math.max(0,Number(r.querySelector('.oi-qty').value)||0);
+    const border=Math.max(0,Number(r.querySelector('.oi-border')?.value)||0);
+    total+=(p&&(!r.querySelector('.oi-half-toggle')?.checked||p2))?(price+border)*q:0;
+  });
+  return total+Math.max(0,Number(document.getElementById('deliveryFee').value)||0);
+}
+function paymentFormCanBeMarkedPaid(){
+  const method=document.getElementById('paymentMethod')?.value||'';
+  if(!method)return false;
+  if(method!=='Dividido')return true;
+  const ids=['payPix','payCash','payDebit','payCredit','payOther'];
+  const allocated=ids.reduce((sum,id)=>sum+(Number(document.getElementById(id)?.value)||0),0);
+  return Math.abs(allocated-currentOrderFormTotal())<=0.009;
+}
+function refreshPaymentStatusOption(){
+  const select=document.getElementById('paymentStatus');
+  if(!select)return;
+  const paidOption=[...select.options].find(option=>option.value==='Pago');
+  if(!paidOption)return;
+  paidOption.disabled=!paymentFormCanBeMarkedPaid();
+  if(paidOption.disabled&&select.value==='Pago')select.value='Aguardando pagamento';
+}
 function calcTotal(){
   let total=0;
   document.querySelectorAll('.orderrow').forEach(r=>{
@@ -471,6 +503,7 @@ function calcTotal(){
   });
   const taxa=Math.max(0,Number(document.getElementById('deliveryFee').value)||0);
   total+=taxa; document.getElementById('orderTotal').textContent=brl(total);
+  refreshPaymentStatusOption();
 }
 
 document.getElementById('deliveryFee').addEventListener('input', calcTotal);
@@ -486,7 +519,7 @@ document.getElementById('newOrder').onclick=()=>{
   document.getElementById('paymentMethod').value='';
   ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id).value=0);
   document.getElementById('payOtherName').value='';
-  togglePaymentFields();updatePaymentAllocated();
+  togglePaymentFields();updatePaymentAllocated();refreshPaymentStatusOption();
   document.getElementById('notes').value='';
   document.getElementById('deliveryFee').value='';
   document.getElementById('courierName').value='';
@@ -532,7 +565,12 @@ document.getElementById('saveOrder').onclick = () => {
   const total = subtotal + deliveryFee;
   const selectedPayment=document.getElementById('paymentMethod').value;
   const selectedPaymentStatus=document.getElementById('paymentStatus').value || 'Aguardando pagamento';
-  if(!selectedPayment && selectedPaymentStatus==='Pago'){alert('Escolha a forma de pagamento para marcar como pago.');return;}
+  if(selectedPaymentStatus==='Pago'&&!paymentFormCanBeMarkedPaid()){
+    alert('Para marcar como pago, confirme a forma de pagamento. Se escolher Dividido, a soma dos valores precisa ser igual ao total do pedido.');
+    document.getElementById('paymentStatus').value='Aguardando pagamento';
+    refreshPaymentStatusOption();
+    return;
+  }
   const paymentBreakdown={pix:0,cash:0,debit:0,credit:0,other:0,otherName:document.getElementById('payOtherName').value.trim()};
   if(selectedPayment==='Dividido'){
     paymentBreakdown.pix=Number(document.getElementById('payPix').value)||0;
@@ -605,7 +643,7 @@ function editOrder(id) {
   document.getElementById('payOther').value=parts.other;
   document.getElementById('payOtherName').value=o.paymentBreakdown?.otherName||'';
   document.getElementById('paymentMethod').value=paymentMethodFromOrder(o);
-  togglePaymentFields();updatePaymentAllocated();
+  togglePaymentFields();updatePaymentAllocated();refreshPaymentStatusOption();
   document.getElementById('notes').value = o.notes || '';
   document.getElementById('deliveryFee').value = Number(o.deliveryFee || 0);
   document.getElementById('courierName').value = o.courierName || '';
@@ -732,7 +770,7 @@ function renderOrders() {
 }
 
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
-window.changePaymentStatus=(id,status)=>{const o=db.orders.find(o=>o.id===id);if(!o)return;if(status==='Pago'){const parts=rawPaymentParts(o),allocated=parts.pix+parts.cash+parts.debit+parts.credit+parts.other;if(!o.payment||Math.abs(allocated-Number(o.total||0))>0.009){alert('Para marcar como pago, edite o pedido, escolha a forma de pagamento e confira os valores.');renderOrders();return;}}o.paymentStatus=status;save();renderOrders();};
+window.changePaymentStatus=(id,status)=>{const o=db.orders.find(o=>o.id===id);if(!o)return;if(status==='Pago'){const method=paymentMethodFromOrder(o),parts=rawPaymentParts(o),allocated=parts.pix+parts.cash+parts.debit+parts.credit+parts.other;const valid=!!method&&(method!=='Dividido'||!!o.paymentBreakdown)&&Math.abs(allocated-Number(o.total||0))<=0.009;if(!valid){alert('Para marcar como pago, primeiro edite o pedido, escolha e confirme a forma de pagamento. Em Dividido, confira se a soma é igual ao total.');renderOrders();return;}}o.paymentStatus=status;save();renderOrders();};
 window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
 // Botão Editar: usa delegação de eventos para continuar funcionando após a lista ser redesenhada.
 document.getElementById('orderList').addEventListener('click', function(event) {
@@ -966,9 +1004,11 @@ function togglePaymentFields(){
     fields.hidden=!showSplit;
     fields.classList.toggle('hidden',!showSplit);
   }
+  refreshPaymentStatusOption();
 }
-function updatePaymentAllocated(){const ids=['payPix','payCash','payDebit','payCredit','payOther'];const sum=ids.reduce((s,id)=>s+(Number(document.getElementById(id)?.value)||0),0);const out=document.getElementById('paymentAllocated');if(out)out.textContent=brl(sum);}
+function updatePaymentAllocated(){const ids=['payPix','payCash','payDebit','payCredit','payOther'];const sum=ids.reduce((s,id)=>s+(Number(document.getElementById(id)?.value)||0),0);const out=document.getElementById('paymentAllocated');if(out)out.textContent=brl(sum);refreshPaymentStatusOption();}
 document.getElementById('paymentMethod')?.addEventListener('change',togglePaymentFields);
+document.getElementById('paymentStatus')?.addEventListener('change',()=>{if(document.getElementById('paymentStatus').value==='Pago'&&!paymentFormCanBeMarkedPaid()){alert('Para marcar como pago, confirme a forma de pagamento e confira os valores.');document.getElementById('paymentStatus').value='Aguardando pagamento';}refreshPaymentStatusOption();});
 ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id)?.addEventListener('input',updatePaymentAllocated));
 
 function prepareDashboardOrderFilters(status){
