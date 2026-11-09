@@ -250,7 +250,13 @@ function load(){try{return JSON.parse(localStorage.getItem(KEY))||{products:[],o
 function save(){localStorage.setItem(KEY,JSON.stringify(db));renderAll()}
 function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()))return '';return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
 function todayKey(){return localDateKey(new Date())}
-function paymentStatusOf(o){return o.paymentStatus || 'Pago'}
+function paymentStatusOf(o){
+  if(o.paymentStatus) return o.paymentStatus;
+  // Pedidos antigos sem situação salva: só considerar pago se houver forma/valor de pagamento registrado.
+  const parts=rawPaymentParts(o);
+  const allocated=parts.pix+parts.cash+parts.debit+parts.credit+parts.other;
+  return o.payment && (allocated>0 || Number(o.total||0)===0) ? 'Pago' : 'Aguardando pagamento';
+}
 function isPaymentReceived(o){return paymentStatusOf(o)==='Pago'}
 function rawPaymentParts(o){if(o.paymentBreakdown)return {pix:Number(o.paymentBreakdown.pix||0),cash:Number(o.paymentBreakdown.cash||0),debit:Number(o.paymentBreakdown.debit||0),credit:Number(o.paymentBreakdown.credit||0),other:Number(o.paymentBreakdown.other||0)};const v=Number(o.total||0);return {pix:o.payment==='Pix'?v:0,cash:o.payment==='Dinheiro'?v:0,debit:o.payment==='Cartão de débito'?v:0,credit:o.payment==='Cartão de crédito'?v:0,other:['Pix','Dinheiro','Cartão de débito','Cartão de crédito'].includes(o.payment)?0:v}}
 function paymentParts(o){if(!isPaymentReceived(o))return {pix:0,cash:0,debit:0,credit:0,other:0};return rawPaymentParts(o)}
@@ -270,24 +276,30 @@ function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entre
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
-function openOrdersFromDashboard(){
+function prepareDashboardOrderFilters(status){
   setPage('pedidos');
   const dateFilter=document.getElementById('orderDateFilter');
   const statusFilter=document.getElementById('statusFilter');
   const paymentFilter=document.getElementById('paymentStatusFilter');
   const search=document.getElementById('orderSearch');
   if(dateFilter)dateFilter.value='today';
-  if(statusFilter)statusFilter.value='__open__';
+  if(statusFilter)statusFilter.value=status;
   if(paymentFilter)paymentFilter.value='';
   if(search)search.value='';
   renderOrders();
 }
+function openOrdersFromDashboard(){prepareDashboardOrderFilters('__open__');}
+function openTodayOrdersFromDashboard(){prepareDashboardOrderFilters('');}
 document.getElementById('stats')?.addEventListener('click',event=>{
   if(event.target.closest('#openOrdersShortcut'))openOrdersFromDashboard();
+  else if(event.target.closest('#todayOrdersShortcut'))openTodayOrdersFromDashboard();
 });
 document.getElementById('stats')?.addEventListener('keydown',event=>{
-  if(event.target.closest('#openOrdersShortcut')&&(event.key==='Enter'||event.key===' ')){
-    event.preventDefault();openOrdersFromDashboard();
+  const target=event.target.closest('#openOrdersShortcut, #todayOrdersShortcut');
+  if(target&&(event.key==='Enter'||event.key===' ')){
+    event.preventDefault();
+    if(target.id==='openOrdersShortcut')openOrdersFromDashboard();
+    else openTodayOrdersFromDashboard();
   }
 });
 function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport();renderQuantityReport();renderDailyClosings();renderCloseDayState()}
@@ -337,7 +349,7 @@ function renderStats() {
   document.getElementById('stats').innerHTML = `
     <h3 class="finance-title" style="grid-column:1/-1">Resumo do dia</h3>
     <div class="stat"><span>Produtos cadastrados</span><strong>${db.products.length}</strong></div>
-    <div class="stat"><span>Pedidos de hoje</span><strong>${orders.length}</strong></div>
+    <div class="stat stat-link" id="todayOrdersShortcut" role="button" tabindex="0" title="Abrir todos os pedidos de hoje"><span>Pedidos de hoje</span><strong>${orders.length}</strong><small>Clique para ver os pedidos de hoje</small></div>
     <div class="stat stat-link" id="openOrdersShortcut" role="button" tabindex="0" title="Abrir a lista de pedidos em aberto"><span>Pedidos em aberto</span><strong>${pedidosAbertos}</strong><small>Clique para ver e editar</small></div>
     <div class="stat"><span>Vendas entregues (valor bruto)</span><strong>${brl(vendasBrutas)}</strong></div>
 
@@ -597,8 +609,8 @@ function editOrder(id) {
     alert('Pedido não encontrado.');
     return;
   }
-  if (['Entregue', 'Cancelado'].includes(o.status)) {
-    alert('Pedidos entregues ou cancelados não podem ser editados.');
+  if (o.status === 'Cancelado' || (o.status === 'Entregue' && isPaymentReceived(o))) {
+    alert('Este pedido não pode ser editado. Pedidos entregues e ainda não pagos podem receber a forma de pagamento.');
     return;
   }
 
@@ -670,7 +682,9 @@ function renderOrders() {
   const dateMode = document.getElementById('orderDateFilter')?.value || 'today';
   let orders = db.orders.filter(o =>
     (dateMode === 'all' || (localDateKey(o.created) === todayKey() && !o.closedAt)) &&
-    (status === '__open__' ? !['Entregue', 'Cancelado'].includes(o.status) : (!status || o.status === status)) &&
+    (status === '__open__'
+      ? (o.status !== 'Cancelado' && (o.status !== 'Entregue' || paymentStatus === 'Aguardando pagamento'))
+      : (!status || o.status === status)) &&
     (!paymentStatus || paymentStatusOf(o) === paymentStatus) &&
     (o.customer + ' ' + o.phone + ' ' + o.number).toLowerCase().includes(q)
   );
@@ -968,7 +982,9 @@ document.getElementById('closeDayBtn')?.addEventListener('click',()=>{
   alert('Dia fechado! Os pedidos foram guardados no histórico sem mudar os status.');
 });
 document.getElementById('orderDateFilter')?.addEventListener('change',renderOrders);
+document.getElementById('statusFilter')?.addEventListener('change',renderOrders);
 document.getElementById('paymentStatusFilter')?.addEventListener('change',renderOrders);
+document.getElementById('orderSearch')?.addEventListener('input',renderOrders);
 
 function togglePaymentFields(){
   const method=document.getElementById('paymentMethod')?.value;
