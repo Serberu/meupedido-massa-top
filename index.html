@@ -674,7 +674,7 @@ function renderOrders() {
 
         <div class="formrow">
           <div>
-            <label>Status</label>
+            <label>Status do pedido</label>
             <select onchange="changeStatus('${o.id}',this.value)">
               ${['Recebido','Em preparo','Saiu para entrega','Entregue','Cancelado']
                 .map(s => `<option ${o.status === s ? 'selected' : ''}>${s}</option>`)
@@ -686,6 +686,15 @@ function renderOrders() {
             <div class="muted">
               ${o.items.map(i => `${i.qty} × ${brl(i.price)} = ${brl(i.subtotal ?? (i.price * i.qty))}`).join('<br>')}
             </div>
+          </div>
+        </div>
+        <div class="formrow" style="margin-top:8px">
+          <div>
+            <label>Forma de pagamento</label>
+            <select onchange="changePayment('${o.id}',this.value)">
+              <option value="" ${!paymentMethodFromOrder(o) ? 'selected' : ''}>Selecione a forma de pagamento</option>
+              ${['Pix','Dinheiro','Cartão de débito','Cartão de crédito','Dividido','Aguardando pagamento'].map(method => `<option value="${method}" ${paymentMethodFromOrder(o) === method ? 'selected' : ''}>${method}</option>`).join('')}
+            </select>
           </div>
         </div>
 
@@ -701,6 +710,22 @@ function renderOrders() {
 }
 
 window.changeStatus=(id,status)=>{let o=db.orders.find(o=>o.id===id);if(o){o.status=status;save();renderOrders()}};
+window.changePayment=(id,method)=>{
+  const o=db.orders.find(order=>order.id===id);
+  if(!o)return;
+  if(method==='Dividido'){
+    alert('Para dividir o pagamento, abra Editar pedido e informe os valores de cada forma de pagamento.');
+    editOrder(id);
+    return;
+  }
+  o.payment=method;
+  const total=Number(o.total||0);
+  const breakdown={pix:0,cash:0,debit:0,credit:0,other:0,otherName:''};
+  const key={'Pix':'pix','Dinheiro':'cash','Cartão de débito':'debit','Cartão de crédito':'credit'}[method];
+  if(key)breakdown[key]=total;
+  o.paymentBreakdown=breakdown;
+  save();
+};
 window.deleteO=id=>{if(confirm('Excluir este pedido definitivamente?')){db.orders=db.orders.filter(o=>o.id!==id);save()}};
 // Botão Editar: usa delegação de eventos para continuar funcionando após a lista ser redesenhada.
 document.getElementById('orderList').addEventListener('click', function(event) {
