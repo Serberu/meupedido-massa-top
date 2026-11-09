@@ -582,11 +582,6 @@ function editOrder(id) {
     alert('Pedido não encontrado.');
     return;
   }
-  if (o.status === 'Cancelado' || (o.status === 'Entregue' && o.payment !== 'Aguardando pagamento')) {
-    alert('Pedidos entregues ou cancelados não podem ser editados, exceto os que aguardam pagamento.');
-    return;
-  }
-
   editingOrderId = o.id;
   document.getElementById('orderForm').querySelector('h2').textContent = 'Editar pedido #' + o.number;
   document.getElementById('saveOrder').textContent = 'Salvar alterações';
@@ -696,9 +691,8 @@ function renderOrders() {
 
         <div class="actions">
           <button type="button" class="secondary" data-print-order="${esc(o.id)}">Imprimir pedido</button>
-          ${(!['Entregue', 'Cancelado'].includes(o.status) || o.payment === 'Aguardando pagamento')
-            ? `<button type="button" class="primary" data-edit-order="${esc(o.id)}">${o.payment === 'Aguardando pagamento' ? 'Registrar pagamento' : 'Editar pedido'}</button>`
-            : ''}
+          <button type="button" class="primary" data-edit-order="${esc(o.id)}">Editar pedido</button>
+          ${o.payment === 'Aguardando pagamento' ? `<button type="button" class="secondary" data-edit-order="${esc(o.id)}">Registrar pagamento</button>` : ''}
           <button class="danger" onclick="deleteO('${o.id}')">Excluir pedido</button>
         </div>
       </div>
