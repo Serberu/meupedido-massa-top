@@ -12,7 +12,6 @@ button,.tab{border:0;border-radius:9px;padding:11px 14px;cursor:pointer;font-siz
 .tab{background:#eee;color:#222}.tab.active{background:var(--yellow)}button.primary{background:var(--red);color:#fff}button.secondary{background:#eee;color:#222}button.danger{background:#ffebee;color:#a40000}
 main{max-width:1000px;margin:0 auto;padding:16px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:16px}.stat,.panel,.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}.stat span{display:block;color:var(--muted);font-size:13px}.stat strong{font-size:24px;display:block;margin-top:5px}
 .stat.finance{border-top:4px solid var(--yellow);box-shadow:0 2px 8px rgba(0,0,0,.04)}
-.stat.stat-link{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}.stat.stat-link:hover,.stat.stat-link:focus{outline:2px solid var(--red);outline-offset:2px;box-shadow:0 3px 12px rgba(0,0,0,.10)}.stat.stat-link:active{transform:scale(.99)}
 .stat.finance-total{background:var(--dark);color:#fff;border-color:var(--dark)}
 .stat.finance-total span{color:#f5f5f5}
 .stat small{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.4}
@@ -25,7 +24,7 @@ input,select,textarea{width:100%;padding:11px;border:1px solid #ccc;border-radiu
 .payment-badge{display:inline-block;border-radius:20px;padding:6px 10px;font-size:12px;font-weight:800}.payment-badge.waiting,.payment-waiting{background:#fff4d6;border-color:#f2d58b;color:#765300}.payment-badge.paid,.payment-paid{background:#e8f5e9;border-color:#b7dfbd;color:#1d6b32}.payment-mini{font-size:11px;font-weight:700;margin-top:5px}.payment-mini.waiting{color:#946600}.payment-mini.paid{color:#24733a}
 .formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}.empty{padding:28px;text-align:center;color:var(--muted);background:white;border:1px dashed #ccc;border-radius:12px}
 #notice{padding:10px 14px;background:#fff8e1;border:1px solid #ffe082;border-radius:9px;font-size:13px;margin-bottom:14px}
-.hidden{display:none!important}#splitPaymentFields.hidden{display:none!important}.right{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.qty{display:flex;gap:8px;align-items:center}.qty input{width:90px}
+.stat-link{cursor:pointer;transition:transform .12s,box-shadow .12s}.stat-link:hover,.stat-link:focus{transform:translateY(-2px);box-shadow:0 3px 12px #0002;outline:2px solid var(--yellow);outline-offset:2px}.stat-link small{display:block;color:var(--muted);font-size:12px;margin-top:4px}.hidden{display:none!important}#splitPaymentFields.hidden{display:none!important}.right{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap}.qty{display:flex;gap:8px;align-items:center}.qty input{width:90px}
 footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-size:12px}
 @media(max-width:520px){main{padding:10px}header h1{font-size:21px}.tab{flex:1;padding:10px 8px}}
 </style>
@@ -69,8 +68,8 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
     <div id="expenseList"></div>
   </div>
   <div class="panel" style="margin-top:12px">
-    <h3>Quantidade de produtos vendidos</h3>
-    <p class="muted">Veja quantas unidades saíram por categoria e por produto. Só entram pedidos marcados como Entregue. Pizza meio a meio conta como uma pizza.</p>
+    <h3>Relatório simples — quantidade de produtos vendidos</h3>
+    <p class="muted">Veja quantas unidades saíram por categoria e por produto cadastrado. Só entram pedidos marcados como Entregue; pedidos cancelados e ainda em andamento ficam fora. Combos contam pela quantidade cadastrada no pedido. Pizza meio a meio conta como uma pizza.</p>
     <div class="formrow">
       <div><label for="quantityPeriod">Consultar</label><select id="quantityPeriod"><option value="today">Hoje</option><option value="day">Dia específico</option><option value="range">Período (data inicial e final)</option><option value="week">Semana</option><option value="month">Mês</option></select></div>
       <div id="quantityDayWrap" class="hidden"><label for="quantityDay">Escolha o dia</label><input id="quantityDay" type="date"></div>
@@ -252,7 +251,7 @@ function localDateKey(value){const d=new Date(value);if(Number.isNaN(d.getTime()
 function todayKey(){return localDateKey(new Date())}
 function paymentStatusOf(o){
   if(o.paymentStatus) return o.paymentStatus;
-  // Pedidos antigos sem situação salva: só considerar pago se houver forma/valor de pagamento registrado.
+  // Pedidos antigos sem situação salva só contam como pagos quando há forma e valor de pagamento registrados.
   const parts=rawPaymentParts(o);
   const allocated=parts.pix+parts.cash+parts.debit+parts.credit+parts.other;
   return o.payment && (allocated>0 || Number(o.total||0)===0) ? 'Pago' : 'Aguardando pagamento';
@@ -276,32 +275,6 @@ function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entre
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
-function prepareDashboardOrderFilters(status){
-  setPage('pedidos');
-  const dateFilter=document.getElementById('orderDateFilter');
-  const statusFilter=document.getElementById('statusFilter');
-  const paymentFilter=document.getElementById('paymentStatusFilter');
-  const search=document.getElementById('orderSearch');
-  if(dateFilter)dateFilter.value='today';
-  if(statusFilter)statusFilter.value=status;
-  if(paymentFilter)paymentFilter.value='';
-  if(search)search.value='';
-  renderOrders();
-}
-function openOrdersFromDashboard(){prepareDashboardOrderFilters('__open__');}
-function openTodayOrdersFromDashboard(){prepareDashboardOrderFilters('');}
-document.getElementById('stats')?.addEventListener('click',event=>{
-  if(event.target.closest('#openOrdersShortcut'))openOrdersFromDashboard();
-  else if(event.target.closest('#todayOrdersShortcut'))openTodayOrdersFromDashboard();
-});
-document.getElementById('stats')?.addEventListener('keydown',event=>{
-  const target=event.target.closest('#openOrdersShortcut, #todayOrdersShortcut');
-  if(target&&(event.key==='Enter'||event.key===' ')){
-    event.preventDefault();
-    if(target.id==='openOrdersShortcut')openOrdersFromDashboard();
-    else openTodayOrdersFromDashboard();
-  }
-});
 function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport();renderQuantityReport();renderDailyClosings();renderCloseDayState()}
 
 function renderStats() {
@@ -320,9 +293,12 @@ function renderStats() {
     !o.closedAt && o.status !== 'Cancelado'
   );
   const entregues = orders.filter(o => o.status === 'Entregue');
+  const pagamentosRecebidos = orders.filter(isPaymentReceived);
   const entreguesHoje = db.orders.filter(o => new Date(o.created).toDateString() === today && o.status === 'Entregue');
 
-  const somar = key => entregues.reduce((s,o)=>s+paymentParts(o)[key],0);
+  // O painel registra o dinheiro no momento em que o pedido é marcado como Pago,
+  // mesmo que ainda esteja Recebido, Em preparo ou Saiu para entrega.
+  const somar = key => pagamentosRecebidos.reduce((s,o)=>s+paymentParts(o)[key],0);
   const dinheiro=somar('cash'), pix=somar('pix'), debitoBruto=somar('debit'), creditoBruto=somar('credit'), outros=somar('other');
   const taxaDebito = Math.max(0, Number(db.paymentFees.debit) || 0);
   const taxaCredito = Math.max(0, Number(db.paymentFees.credit) || 0);
@@ -330,7 +306,7 @@ function renderStats() {
   const descontoCredito = creditoBruto * taxaCredito / 100;
   const debitoLiquido = debitoBruto - descontoDebito;
   const creditoLiquido = creditoBruto - descontoCredito;
-  const vendasBrutas = entregues.filter(isPaymentReceived).reduce((s, o) => s + Number(o.total || 0), 0);
+  const vendasBrutas = pagamentosRecebidos.reduce((s, o) => s + Number(o.total || 0), 0);
   const totalLiquido = dinheiro + pix + debitoLiquido + creditoLiquido + outros;
   const pedidosAbertos = db.orders.filter(o => !o.closedAt && !['Entregue', 'Cancelado'].includes(o.status)).length;
 
@@ -350,8 +326,8 @@ function renderStats() {
     <h3 class="finance-title" style="grid-column:1/-1">Resumo do dia</h3>
     <div class="stat"><span>Produtos cadastrados</span><strong>${db.products.length}</strong></div>
     <div class="stat stat-link" id="todayOrdersShortcut" role="button" tabindex="0" title="Abrir todos os pedidos de hoje"><span>Pedidos de hoje</span><strong>${orders.length}</strong><small>Clique para ver os pedidos de hoje</small></div>
-    <div class="stat stat-link" id="openOrdersShortcut" role="button" tabindex="0" title="Abrir a lista de pedidos em aberto"><span>Pedidos em aberto</span><strong>${pedidosAbertos}</strong><small>Clique para ver e editar</small></div>
-    <div class="stat"><span>Vendas entregues (valor bruto)</span><strong>${brl(vendasBrutas)}</strong></div>
+    <div class="stat stat-link" id="openOrdersShortcut" role="button" tabindex="0" title="Abrir pedidos em aberto"><span>Pedidos em aberto</span><strong>${pedidosAbertos}</strong><small>Clique para ver os pedidos em aberto</small></div>
+    <div class="stat"><span>Pagamentos recebidos hoje</span><strong>${brl(vendasBrutas)}</strong><small>${pagamentosRecebidos.length} pedido(s) marcados como pago</small></div>
 
     <h3 class="finance-title" style="grid-column:1/-1">Fundo inicial do caixa</h3>
     <div class="stat"><label for="openingCash">Dinheiro que já tinha</label><input id="openingCash" type="number" min="0" step="0.01" value="${fundoDinheiro.toFixed(2)}"></div>
@@ -609,8 +585,8 @@ function editOrder(id) {
     alert('Pedido não encontrado.');
     return;
   }
-  if (o.status === 'Cancelado' || (o.status === 'Entregue' && isPaymentReceived(o))) {
-    alert('Este pedido não pode ser editado. Pedidos entregues e ainda não pagos podem receber a forma de pagamento.');
+  if (['Entregue', 'Cancelado'].includes(o.status)) {
+    alert('Pedidos entregues ou cancelados não podem ser editados.');
     return;
   }
 
@@ -682,9 +658,7 @@ function renderOrders() {
   const dateMode = document.getElementById('orderDateFilter')?.value || 'today';
   let orders = db.orders.filter(o =>
     (dateMode === 'all' || (localDateKey(o.created) === todayKey() && !o.closedAt)) &&
-    (status === '__open__'
-      ? (o.status !== 'Cancelado' && (o.status !== 'Entregue' || paymentStatus === 'Aguardando pagamento'))
-      : (!status || o.status === status)) &&
+    (status === '__open__' ? (o.status !== 'Entregue' && o.status !== 'Cancelado') : (!status || o.status === status)) &&
     (!paymentStatus || paymentStatusOf(o) === paymentStatus) &&
     (o.customer + ' ' + o.phone + ' ' + o.number).toLowerCase().includes(q)
   );
@@ -982,9 +956,7 @@ document.getElementById('closeDayBtn')?.addEventListener('click',()=>{
   alert('Dia fechado! Os pedidos foram guardados no histórico sem mudar os status.');
 });
 document.getElementById('orderDateFilter')?.addEventListener('change',renderOrders);
-document.getElementById('statusFilter')?.addEventListener('change',renderOrders);
 document.getElementById('paymentStatusFilter')?.addEventListener('change',renderOrders);
-document.getElementById('orderSearch')?.addEventListener('input',renderOrders);
 
 function togglePaymentFields(){
   const method=document.getElementById('paymentMethod')?.value;
@@ -998,6 +970,33 @@ function togglePaymentFields(){
 function updatePaymentAllocated(){const ids=['payPix','payCash','payDebit','payCredit','payOther'];const sum=ids.reduce((s,id)=>s+(Number(document.getElementById(id)?.value)||0),0);const out=document.getElementById('paymentAllocated');if(out)out.textContent=brl(sum);}
 document.getElementById('paymentMethod')?.addEventListener('change',togglePaymentFields);
 ['payPix','payCash','payDebit','payCredit','payOther'].forEach(id=>document.getElementById(id)?.addEventListener('input',updatePaymentAllocated));
+
+function prepareDashboardOrderFilters(status){
+  setPage('pedidos');
+  const dateFilter=document.getElementById('orderDateFilter');
+  const statusFilter=document.getElementById('statusFilter');
+  const paymentFilter=document.getElementById('paymentStatusFilter');
+  const search=document.getElementById('orderSearch');
+  if(dateFilter)dateFilter.value='today';
+  if(statusFilter)statusFilter.value=status;
+  if(paymentFilter)paymentFilter.value='';
+  if(search)search.value='';
+  renderOrders();
+}
+function openOrdersFromDashboard(){prepareDashboardOrderFilters('__open__');}
+function openTodayOrdersFromDashboard(){prepareDashboardOrderFilters('');}
+document.getElementById('stats')?.addEventListener('click',event=>{
+  if(event.target.closest('#openOrdersShortcut'))openOrdersFromDashboard();
+  else if(event.target.closest('#todayOrdersShortcut'))openTodayOrdersFromDashboard();
+});
+document.getElementById('stats')?.addEventListener('keydown',event=>{
+  const target=event.target.closest('#openOrdersShortcut, #todayOrdersShortcut');
+  if(target&&(event.key==='Enter'||event.key===' ')){
+    event.preventDefault();
+    if(target.id==='openOrdersShortcut')openOrdersFromDashboard();
+    else openTodayOrdersFromDashboard();
+  }
+});
 
 renderAll();
 </script></body></html>
