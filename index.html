@@ -12,6 +12,7 @@ button,.tab{border:0;border-radius:9px;padding:11px 14px;cursor:pointer;font-siz
 .tab{background:#eee;color:#222}.tab.active{background:var(--yellow)}button.primary{background:var(--red);color:#fff}button.secondary{background:#eee;color:#222}button.danger{background:#ffebee;color:#a40000}
 main{max-width:1000px;margin:0 auto;padding:16px}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(145px,1fr));gap:10px;margin-bottom:16px}.stat,.panel,.item{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}.stat span{display:block;color:var(--muted);font-size:13px}.stat strong{font-size:24px;display:block;margin-top:5px}
 .stat.finance{border-top:4px solid var(--yellow);box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.stat.stat-link{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}.stat.stat-link:hover,.stat.stat-link:focus{outline:2px solid var(--red);outline-offset:2px;box-shadow:0 3px 12px rgba(0,0,0,.10)}.stat.stat-link:active{transform:scale(.99)}
 .stat.finance-total{background:var(--dark);color:#fff;border-color:var(--dark)}
 .stat.finance-total span{color:#f5f5f5}
 .stat small{display:block;margin-top:6px;color:var(--muted);font-size:12px;line-height:1.4}
@@ -112,7 +113,7 @@ footer{max-width:1000px;margin:0 auto;padding:10px 16px 24px;color:#666;font-siz
 </div>
 </section>
 <section id="page-pedidos" class="hidden">
-<div class="toolbar"><select id="orderDateFilter"><option value="today">Pedidos de hoje</option><option value="all">Todos os pedidos (histórico)</option></select><select id="statusFilter"><option value="">Todos os status do pedido</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><select id="paymentStatusFilter"><option value="">Todos os pagamentos</option><option value="Aguardando pagamento">Aguardando pagamento</option><option value="Pago">Pago</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
+<div class="toolbar"><select id="orderDateFilter"><option value="today">Pedidos de hoje</option><option value="all">Todos os pedidos (histórico)</option></select><select id="statusFilter"><option value="">Todos os status do pedido</option><option value="__open__">Pedidos em aberto</option><option>Recebido</option><option>Em preparo</option><option>Saiu para entrega</option><option>Entregue</option><option>Cancelado</option></select><select id="paymentStatusFilter"><option value="">Todos os pagamentos</option><option value="Aguardando pagamento">Aguardando pagamento</option><option value="Pago">Pago</option></select><input id="orderSearch" placeholder="Buscar cliente ou pedido"><button class="primary" id="newOrder">+ Novo pedido</button></div>
 <div id="paymentStatusSummary" class="stats"></div>
 <div id="orderForm" class="panel hidden">
 <h2>Novo pedido</h2>
@@ -269,6 +270,26 @@ function moneyForClose(orders,payment){return orders.filter(o=>o.status==='Entre
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function setPage(page){document.querySelectorAll('[id^="page-"]').forEach(e=>e.classList.toggle('hidden',e.id!=='page-'+page));document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.page===page));renderAll()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>setPage(b.dataset.page));
+function openOrdersFromDashboard(){
+  setPage('pedidos');
+  const dateFilter=document.getElementById('orderDateFilter');
+  const statusFilter=document.getElementById('statusFilter');
+  const paymentFilter=document.getElementById('paymentStatusFilter');
+  const search=document.getElementById('orderSearch');
+  if(dateFilter)dateFilter.value='today';
+  if(statusFilter)statusFilter.value='__open__';
+  if(paymentFilter)paymentFilter.value='';
+  if(search)search.value='';
+  renderOrders();
+}
+document.getElementById('stats')?.addEventListener('click',event=>{
+  if(event.target.closest('#openOrdersShortcut'))openOrdersFromDashboard();
+});
+document.getElementById('stats')?.addEventListener('keydown',event=>{
+  if(event.target.closest('#openOrdersShortcut')&&(event.key==='Enter'||event.key===' ')){
+    event.preventDefault();openOrdersFromDashboard();
+  }
+});
 function renderAll(){renderStats();renderProducts();renderOrders();renderRecent();renderMonthlyReport();renderQuantityReport();renderDailyClosings();renderCloseDayState()}
 
 function renderStats() {
@@ -317,7 +338,7 @@ function renderStats() {
     <h3 class="finance-title" style="grid-column:1/-1">Resumo do dia</h3>
     <div class="stat"><span>Produtos cadastrados</span><strong>${db.products.length}</strong></div>
     <div class="stat"><span>Pedidos de hoje</span><strong>${orders.length}</strong></div>
-    <div class="stat"><span>Pedidos em aberto</span><strong>${pedidosAbertos}</strong></div>
+    <div class="stat stat-link" id="openOrdersShortcut" role="button" tabindex="0" title="Abrir a lista de pedidos em aberto"><span>Pedidos em aberto</span><strong>${pedidosAbertos}</strong><small>Clique para ver e editar</small></div>
     <div class="stat"><span>Vendas entregues (valor bruto)</span><strong>${brl(vendasBrutas)}</strong></div>
 
     <h3 class="finance-title" style="grid-column:1/-1">Fundo inicial do caixa</h3>
@@ -649,7 +670,7 @@ function renderOrders() {
   const dateMode = document.getElementById('orderDateFilter')?.value || 'today';
   let orders = db.orders.filter(o =>
     (dateMode === 'all' || (localDateKey(o.created) === todayKey() && !o.closedAt)) &&
-    (!status || o.status === status) &&
+    (status === '__open__' ? !['Entregue', 'Cancelado'].includes(o.status) : (!status || o.status === status)) &&
     (!paymentStatus || paymentStatusOf(o) === paymentStatus) &&
     (o.customer + ' ' + o.phone + ' ' + o.number).toLowerCase().includes(q)
   );
